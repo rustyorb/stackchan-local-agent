@@ -178,7 +178,7 @@ async function playVoicePreview() {
 function presetOpenAI() {
   setField("llm_provider", "openai");
   setField("llm_base_url", "https://api.openai.com/v1");
-  setField("llm_model", "gpt-4o-mini");
+  setField("llm_model", "gpt-5-mini");
   setField("asr_provider", "openai");
   setField("asr_api_url", "https://api.openai.com/v1/audio/transcriptions");
   setField("asr_model", "gpt-4o-mini-transcribe");
@@ -190,7 +190,7 @@ function presetOpenAI() {
 function presetOpenRouter() {
   setField("llm_provider", "openrouter");
   setField("llm_base_url", "https://openrouter.ai/api/v1");
-  setField("llm_model", "openai/gpt-4o-mini");
+  setField("llm_model", "openai/gpt-5-mini");
   setField("asr_provider", "openai");
   setField("asr_api_url", "https://api.openai.com/v1/audio/transcriptions");
   setField("tts_provider", "edge");

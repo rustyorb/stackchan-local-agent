@@ -1,16 +1,38 @@
 diff --git a/main/application.cc b/main/application.cc
-index d69d43d..86cc607 100644
+index d69d43d..617ad36 100644
 --- a/main/application.cc
 +++ b/main/application.cc
 @@ -87,6 +87,7 @@ void Application::Initialize() {
- 
+
      // Add state change listeners
      state_machine_.AddStateChangeListener([this](DeviceState old_state, DeviceState new_state) {
 +        ESP_LOGI(TAG, "Device state changed: %d -> %d", old_state, new_state);
          xEventGroupSetBits(event_group_, MAIN_EVENT_STATE_CHANGED);
      });
- 
-@@ -498,6 +499,8 @@ void Application::InitializeProtocol() {
+
+@@ -318,6 +319,21 @@ void Application::HandleActivationDoneEvent() {
+         // Play the success sound to indicate the device is ready
+         audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
+     });
++
++#if STACKCHAN_DEV_FIRMWARE
++    if (!local_boot_listen_started_) {
++        local_boot_listen_started_ = true;
++        xTaskCreate([](void* arg) {
++            auto* app = static_cast<Application*>(arg);
++            vTaskDelay(pdMS_TO_TICKS(1500));
++            if (app->GetDeviceState() == kDeviceStateIdle) {
++                ESP_LOGW(TAG, "StackChan dev firmware: opening first auto chat after activation");
++                app->ToggleChatState();
++            }
++            vTaskDelete(NULL);
++        }, "boot_listen", 4096, this, 2, nullptr);
++    }
++#endif
+ }
+
+ void Application::ActivationTask() {
+@@ -498,6 +514,8 @@ void Application::InitializeProtocol() {
      protocol_->OnIncomingAudio([this](std::unique_ptr<AudioStreamPacket> packet) {
          if (GetDeviceState() == kDeviceStateSpeaking) {
              audio_service_.PushPacketToDecodeQueue(std::move(packet));
@@ -18,8 +40,8 @@ index d69d43d..86cc607 100644
 +            ESP_LOGW(TAG, "Dropping incoming audio packet while state=%d", GetDeviceState());
          }
      });
-     
-@@ -521,8 +524,16 @@ void Application::InitializeProtocol() {
+
+@@ -521,8 +539,16 @@ void Application::InitializeProtocol() {
      protocol_->OnIncomingJson([this, display](const cJSON* root) {
          // Parse JSON data
          auto type = cJSON_GetObjectItem(root, "type");
@@ -36,9 +58,9 @@ index d69d43d..86cc607 100644
              if (strcmp(state->valuestring, "start") == 0) {
                  Schedule([this]() {
                      aborted_ = false;
-@@ -610,33 +621,36 @@ void Application::InitializeProtocol() {
+@@ -610,33 +636,36 @@ void Application::InitializeProtocol() {
  }
- 
+
  void Application::ShowActivationCode(const std::string& code, const std::string& message) {
 -    struct digit_sound {
 -        char digit;
@@ -46,7 +68,7 @@ index d69d43d..86cc607 100644
 -    };
 -    static const std::array<digit_sound, 10> digit_sounds{{
 -        digit_sound{'0', Lang::Sounds::OGG_0},
--        digit_sound{'1', Lang::Sounds::OGG_1}, 
+-        digit_sound{'1', Lang::Sounds::OGG_1},
 -        digit_sound{'2', Lang::Sounds::OGG_2},
 -        digit_sound{'3', Lang::Sounds::OGG_3},
 -        digit_sound{'4', Lang::Sounds::OGG_4},
@@ -73,7 +95,7 @@ index d69d43d..86cc607 100644
 +    // };
 +    // static const std::array<digit_sound, 10> digit_sounds{{
 +    //     digit_sound{'0', Lang::Sounds::OGG_0},
-+    //     digit_sound{'1', Lang::Sounds::OGG_1}, 
++    //     digit_sound{'1', Lang::Sounds::OGG_1},
 +    //     digit_sound{'2', Lang::Sounds::OGG_2},
 +    //     digit_sound{'3', Lang::Sounds::OGG_3},
 +    //     digit_sound{'4', Lang::Sounds::OGG_4},
@@ -98,8 +120,32 @@ index d69d43d..86cc607 100644
 +    auto display = Board::GetInstance().GetDisplay();
 +    display->SetChatMessage("system", "Please bind and set up in the mobile app.");
  }
- 
+
  void Application::Alert(const char* status, const char* message, const char* emotion, const std::string_view& sound) {
+@@ -884,7 +913,11 @@ void Application::HandleStateChangedEvent() {
+                 // For auto mode, wait for playback queue to be empty before enabling voice processing
+                 // This prevents audio truncation when STOP arrives late due to network jitter
+                 if (listening_mode_ == kListeningModeAutoStop) {
++#if STACKCHAN_DEV_FIRMWARE
++                    ESP_LOGW(TAG, "StackChan dev firmware: skipping playback drain before listen start");
++#else
+                     audio_service_.WaitForPlaybackQueueEmpty();
++#endif
+                 }
+
+                 // Send the start listening command
+diff --git a/main/application.h b/main/application.h
+index 7ca7af4..7270601 100644
+--- a/main/application.h
++++ b/main/application.h
+@@ -140,6 +140,7 @@ private:
+     bool aborted_ = false;
+     bool assets_version_checked_ = false;
+     bool play_popup_on_listening_ = false;  // Flag to play popup sound after state changes to listening
++    bool local_boot_listen_started_ = false;
+     int clock_ticks_ = 0;
+     TaskHandle_t activation_task_handle_ = nullptr;
+
 diff --git a/main/assets.cc b/main/assets.cc
 index ad61944..6b84daf 100644
 --- a/main/assets.cc
@@ -118,7 +164,7 @@ index ad61944..6b84daf 100644
 @@ -356,72 +356,72 @@ bool Assets::LvglStrategy::Apply(Assets* assets) {
  }
  #endif // HAVE_LVGL
- 
+
 -bool Assets::EmoteStrategy::InitializePartition(Assets* assets) {
 -    assets->partition_valid_ = false;
 -
@@ -251,7 +297,7 @@ index ad61944..6b84daf 100644
 +//     }
 +//     return true;
 +// }
- 
+
  bool Assets::Download(std::string url, std::function<void(int progress, size_t speed)> progress_callback) {
      ESP_LOGI(TAG, "Downloading new version of assets from %s", url.c_str());
 diff --git a/main/assets.h b/main/assets.h
@@ -261,7 +307,7 @@ index 3692e0c..7bfbc5c 100644
 @@ -68,13 +68,13 @@ private:
          bool checksum_valid_ = false;
      };
-     
+
 -    class EmoteStrategy : public AssetStrategy {
 -    public:
 -        bool Apply(Assets* assets) override;
@@ -276,9 +322,27 @@ index 3692e0c..7bfbc5c 100644
 +    //     void UnApplyPartition(Assets* assets) override;
 +    //     bool GetAssetData(Assets* assets, const std::string& name, void*& ptr, size_t& size) override;
 +    // };
-     
+
      // Strategy instance
      std::unique_ptr<AssetStrategy> strategy_;
+diff --git a/main/audio/processors/afe_audio_processor.cc b/main/audio/processors/afe_audio_processor.cc
+index 15e9cc5..0143bb6 100644
+--- a/main/audio/processors/afe_audio_processor.cc
++++ b/main/audio/processors/afe_audio_processor.cc
+@@ -67,11 +67,11 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
+     afe_iface_ = esp_afe_handle_from_config(afe_config);
+     afe_data_ = afe_iface_->create_from_config(afe_config);
+
+-    xTaskCreate([](void* arg) {
++    xTaskCreatePinnedToCore([](void* arg) {
+         auto this_ = (AfeAudioProcessor*)arg;
+         this_->AudioProcessorTask();
+         vTaskDelete(NULL);
+-    }, "audio_communication", 4096, this, 3, NULL);
++    }, "audio_communication", 8192, this, 10, NULL, 1);
+ }
+
+ AfeAudioProcessor::~AfeAudioProcessor() {
 diff --git a/main/ota.cc b/main/ota.cc
 index bcc0dc5..4c078ce 100644
 --- a/main/ota.cc
@@ -327,11 +391,11 @@ index f0cc034..fc15f96 100644
 +++ b/main/protocols/websocket_protocol.cc
 @@ -90,6 +90,8 @@ bool WebsocketProtocol::OpenAudioChannel() {
      }
- 
+
      error_occurred_ = false;
 +    ESP_LOGI(TAG, "Opening audio channel: url=%s version=%d token_present=%d", url.c_str(), version_,
 +             token.empty() ? 0 : 1);
- 
+
      auto network = Board::GetInstance().GetNetwork();
      websocket_ = network->CreateWebSocket(1);
 @@ -113,11 +115,20 @@ bool WebsocketProtocol::OpenAudioChannel() {
