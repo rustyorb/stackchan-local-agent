@@ -68,6 +68,15 @@ Start the real XiaoZhi server with:
 It serves OTA on `http://192.168.0.250:8003/xiaozhi/ota/` and WebSocket on
 `ws://192.168.0.250:8000/xiaozhi/v1/`.
 
+The same real server also serves a local settings GUI at:
+
+```text
+http://192.168.0.250:8003/
+```
+
+The GUI edits the ignored XiaoZhi live config so provider URLs, keys, models,
+voices, robot name, and personality prompt stay local.
+
 ## Attribution
 
 This project includes work inspired by and/or derived from:
@@ -81,10 +90,16 @@ See `NOTICE.md` and `third_party/dotty-stackchan/README.md`.
 ## Local Secrets
 
 Do not commit local API keys or Wi-Fi credentials. The local dashboard writes
-provider secrets to:
+bridge provider secrets to:
 
 ```text
 bridge/server-xz/config.local.json
 ```
 
-That file is ignored by git.
+The real XiaoZhi server GUI writes provider secrets to:
+
+```text
+U:\_Projects\xiaozhi-esp32-server\main\xiaozhi-server\data\.config.yaml
+```
+
+Both files are ignored by git.

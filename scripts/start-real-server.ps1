@@ -33,6 +33,8 @@ if (-not (Test-Path -LiteralPath $ServerRoot)) {
     throw "Server checkout not found: $ServerRoot"
 }
 
+& (Join-Path $PSScriptRoot "install-real-server-gui.ps1") -ServerRoot $ServerRoot
+
 $python = Join-Path $ServerRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path -LiteralPath $python)) {
     throw "Python venv not found: $python"
@@ -79,7 +81,13 @@ if (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) {
     if ($listenerPids) {
         Set-Content -LiteralPath $pidFile -Value ($listenerPids | Select-Object -First 1) -Encoding ASCII
     }
+    try {
+        Invoke-WebRequest -Uri "http://192.168.0.250:8003/api/restart-needed" -Method Post -UseBasicParsing -TimeoutSec 3 | Out-Null
+    } catch {
+        Write-Host "Admin restart flag could not be cleared yet: $($_.Exception.Message)"
+    }
     Write-Host "XiaoZhi server started: $(Get-Content -LiteralPath $pidFile)"
+    Write-Host "Admin GUI: http://192.168.0.250:8003/"
     Write-Host "OTA: http://192.168.0.250:8003/xiaozhi/ota/"
     Write-Host "WebSocket: ws://192.168.0.250:8000/xiaozhi/v1/"
     Write-Host "Log: $outLog"

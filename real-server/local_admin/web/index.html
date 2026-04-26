@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StackChan Voice Server</title>
+  <link rel="stylesheet" href="/admin-assets/styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">StackChan XiaoZhi Server</p>
+        <h1>Voice Settings</h1>
+      </div>
+      <div class="status" id="status">Loading</div>
+    </header>
+
+    <section class="server-strip">
+      <div>
+        <span>OTA</span>
+        <code id="otaUrl"></code>
+      </div>
+      <div>
+        <span>WebSocket</span>
+        <code id="websocketUrl"></code>
+      </div>
+    </section>
+
+    <form id="settingsForm" autocomplete="off">
+      <section class="band">
+        <div class="section-head">
+          <h2>Personality</h2>
+          <p>Name and system prompt used by the assistant.</p>
+        </div>
+        <label>
+          Robot name
+          <input name="agent_name" placeholder="StackChan">
+        </label>
+        <label>
+          System prompt
+          <textarea name="system_prompt" rows="8"></textarea>
+        </label>
+      </section>
+
+      <section class="band">
+        <div class="section-head">
+          <h2>Presets</h2>
+          <p>Fill common provider combinations, then save.</p>
+        </div>
+        <div class="button-row">
+          <button type="button" id="presetOpenAI">OpenAI</button>
+          <button type="button" id="presetOpenRouter">OpenRouter</button>
+          <button type="button" id="presetOllama">Ollama / Local</button>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="section-head">
+          <h2>LLM</h2>
+          <p>OpenAI-compatible chat completion settings.</p>
+        </div>
+        <div class="grid">
+          <label>
+            Provider
+            <select name="llm_provider">
+              <option value="openai">OpenAI</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="ollama">Ollama / local</option>
+              <option value="custom">Custom compatible</option>
+            </select>
+          </label>
+          <label>
+            API base URL
+            <input name="llm_base_url" placeholder="https://api.openai.com/v1">
+          </label>
+          <label>
+            Chat model
+            <input name="llm_model" placeholder="gpt-5-mini">
+          </label>
+          <label>
+            Temperature
+            <input name="llm_temperature" type="number" min="0" max="2" step="0.1">
+          </label>
+          <label>
+            Max tokens
+            <input name="llm_max_tokens" type="number" min="32" max="4096" step="1">
+          </label>
+        </div>
+        <label>
+          API key
+          <div class="key-row">
+            <input name="llm_api_key" type="password" placeholder="Leave blank to keep existing key">
+            <button type="button" data-clear="llm">Clear</button>
+          </div>
+          <span class="hint" id="llmKeyHint"></span>
+        </label>
+      </section>
+
+      <section class="band">
+        <div class="section-head">
+          <h2>Speech To Text</h2>
+          <p>First working path uses OpenAI transcription.</p>
+        </div>
+        <div class="grid">
+          <label>
+            Provider
+            <select name="asr_provider">
+              <option value="openai">OpenAI</option>
+              <option value="custom">Custom OpenAI-compatible</option>
+            </select>
+          </label>
+          <label>
+            API URL
+            <input name="asr_api_url" placeholder="https://api.openai.com/v1/audio/transcriptions">
+          </label>
+          <label>
+            STT model
+            <input name="asr_model" placeholder="gpt-4o-mini-transcribe">
+          </label>
+        </div>
+        <label>
+          API key
+          <div class="key-row">
+            <input name="asr_api_key" type="password" placeholder="Leave blank to keep existing key">
+            <button type="button" data-clear="asr">Clear</button>
+          </div>
+          <span class="hint" id="asrKeyHint"></span>
+        </label>
+      </section>
+
+      <section class="band">
+        <div class="section-head">
+          <h2>Voice</h2>
+          <p>Edge TTS is keyless and is the current default.</p>
+        </div>
+        <div class="grid">
+          <label>
+            Provider
+            <select name="tts_provider">
+              <option value="edge">Edge TTS</option>
+              <option value="openai">OpenAI TTS later</option>
+              <option value="custom">Custom later</option>
+            </select>
+          </label>
+          <label>
+            Voice
+            <select name="tts_voice">
+              <option value="en-US-AriaNeural">en-US-AriaNeural</option>
+              <option value="en-US-JennyNeural">en-US-JennyNeural</option>
+              <option value="en-US-GuyNeural">en-US-GuyNeural</option>
+              <option value="en-GB-SoniaNeural">en-GB-SoniaNeural</option>
+              <option value="en-GB-RyanNeural">en-GB-RyanNeural</option>
+              <option value="en-AU-NatashaNeural">en-AU-NatashaNeural</option>
+              <option value="en-AU-WilliamNeural">en-AU-WilliamNeural</option>
+              <option value="ja-JP-NanamiNeural">ja-JP-NanamiNeural</option>
+            </select>
+          </label>
+          <label>
+            Optional API URL
+            <input name="tts_api_url">
+          </label>
+          <label>
+            Optional model
+            <input name="tts_model">
+          </label>
+        </div>
+        <label>
+          Optional API key
+          <div class="key-row">
+            <input name="tts_api_key" type="password" placeholder="Leave blank to keep existing key">
+            <button type="button" data-clear="tts">Clear</button>
+          </div>
+          <span class="hint" id="ttsKeyHint"></span>
+        </label>
+      </section>
+
+      <footer class="actions">
+        <button type="submit" class="primary">Save Settings</button>
+        <button type="button" id="reload">Reload</button>
+      </footer>
+    </form>
+  </main>
+  <script src="/admin-assets/app.js"></script>
+</body>
+</html>

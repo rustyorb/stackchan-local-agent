@@ -26,7 +26,16 @@ if (-not (Test-Path -LiteralPath $config)) { throw "Missing local data\.config.y
 
 & $python -c "import yaml, aiohttp, websockets, openai, edge_tts, opuslib_next, pydub; print('Python dependencies OK')"
 
+& $python -m py_compile (Join-Path $ServerRoot "local_admin\admin.py")
+Write-Host "Admin GUI Python syntax OK"
+
 try {
+    $gui = Invoke-WebRequest -Uri "http://192.168.0.250:8003/" -UseBasicParsing -TimeoutSec 3
+    Write-Host "Admin GUI reachable: HTTP $($gui.StatusCode)"
+
+    $configJson = Invoke-RestMethod -Uri "http://192.168.0.250:8003/api/local-config" -TimeoutSec 3
+    Write-Host "Config API reachable: LLM=$($configJson.llm.provider) ASR=$($configJson.asr.provider) TTS=$($configJson.tts.provider)"
+
     $response = Invoke-WebRequest -Uri "http://192.168.0.250:8003/xiaozhi/ota/" -UseBasicParsing -TimeoutSec 3
     Write-Host "OTA reachable: HTTP $($response.StatusCode)"
     Write-Host ($response.Content | Select-Object -First 1)
