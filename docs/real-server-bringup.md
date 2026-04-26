@@ -69,6 +69,16 @@ in the browser; saved keys are returned only as a redacted presence marker.
 Changes are written immediately, but the XiaoZhi server must be restarted before
 provider changes are loaded.
 
+After saving keys, the GUI can refresh provider metadata without exposing the
+keys back to the browser:
+
+- `Fetch` beside the LLM model calls the saved OpenAI-compatible `/models`
+  endpoint and fills the model suggestions.
+- `Fetch` beside the ASR model does the same, filtered toward transcription
+  models.
+- `Voices` loads the Edge TTS voice catalog.
+- `Play` generates a short Edge TTS preview through the local server.
+
 Expected OTA response:
 
 ```text

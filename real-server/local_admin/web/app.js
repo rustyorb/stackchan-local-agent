@@ -1,6 +1,7 @@
 const form = document.querySelector("#settingsForm");
 const statusEl = document.querySelector("#status");
 const clearState = { llm: false, asr: false, tts: false };
+let voicePreviewUrl = "";
 
 function setStatus(text, state = "") {
   statusEl.textContent = text;
@@ -14,6 +15,26 @@ function setField(name, value) {
 
 function keyText(key) {
   return key?.present ? `Saved key present ${key.preview}` : "No key saved";
+}
+
+function fillDatalist(id, values) {
+  const datalist = document.querySelector(id);
+  datalist.replaceChildren();
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    datalist.append(option);
+  }
+}
+
+function ensureVoiceOption(voice) {
+  const select = form.elements.tts_voice;
+  if (![...select.options].some((option) => option.value === voice)) {
+    const option = document.createElement("option");
+    option.value = voice;
+    option.textContent = voice;
+    select.append(option);
+  }
 }
 
 function applyConfig(config) {
@@ -34,6 +55,7 @@ function applyConfig(config) {
   setField("asr_model", config.asr.model);
 
   setField("tts_provider", config.tts.provider);
+  ensureVoiceOption(config.tts.voice);
   setField("tts_voice", config.tts.voice);
   setField("tts_api_url", config.tts.api_url);
   setField("tts_model", config.tts.model);
@@ -49,7 +71,7 @@ function applyConfig(config) {
   document.querySelector("#asrKeyHint").textContent = keyText(config.asr.api_key);
   document.querySelector("#ttsKeyHint").textContent = keyText(config.tts.api_key);
 
-  setStatus(config.restart_required ? "Restart required" : "Loaded", config.restart_required ? "warn" : "saved");
+  setStatus(config.restart_required ? "Saved - restart voice server to activate" : "Loaded", config.restart_required ? "warn" : "saved");
 }
 
 async function loadConfig() {
@@ -74,7 +96,83 @@ async function saveConfig(event) {
   });
   if (!response.ok) throw new Error(`Save failed: ${response.status}`);
   applyConfig(await response.json());
-  setStatus("Saved - restart required", "warn");
+  await refreshProviderLists(false);
+  setStatus("Saved - restart voice server to activate", "warn");
+}
+
+async function fetchModels(provider, datalistId, fieldName, announce = true) {
+  if (announce) setStatus(`Fetching ${provider.toUpperCase()} models`);
+  const response = await fetch(`/api/provider-models/${provider}`);
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Model fetch failed: ${response.status}`);
+  fillDatalist(datalistId, payload.models || []);
+  if (!form.elements[fieldName].value && payload.models?.length) {
+    setField(fieldName, payload.models[0]);
+  }
+  if (announce) setStatus(`${payload.models?.length || 0} ${provider.toUpperCase()} models loaded`, "saved");
+  return payload.models || [];
+}
+
+async function fetchVoices(announce = true) {
+  if (announce) setStatus("Fetching voices");
+  const current = form.elements.tts_voice.value;
+  const response = await fetch("/api/tts-voices/edge");
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Voice fetch failed: ${response.status}`);
+
+  const select = form.elements.tts_voice;
+  select.replaceChildren();
+  for (const voice of payload.voices || []) {
+    const option = document.createElement("option");
+    option.value = voice.name;
+    option.textContent = `${voice.name} ${voice.gender ? `(${voice.gender})` : ""}`;
+    select.append(option);
+  }
+  if (current) {
+    ensureVoiceOption(current);
+    setField("tts_voice", current);
+  }
+  if (announce) setStatus(`${payload.voices?.length || 0} voices loaded`, "saved");
+  return payload.voices || [];
+}
+
+async function refreshProviderLists(announce = true) {
+  const tasks = [
+    fetchModels("llm", "#llmModels", "llm_model", false),
+    fetchModels("asr", "#asrModels", "asr_model", false),
+    fetchVoices(false),
+  ];
+  const results = await Promise.allSettled(tasks);
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length && announce) {
+    setStatus("Some lists failed to load", "error");
+    console.error(failures.map((failure) => failure.reason));
+    return;
+  }
+  if (announce) setStatus("Provider lists refreshed", "saved");
+}
+
+async function playVoicePreview() {
+  setStatus("Generating voice preview");
+  const response = await fetch("/api/tts-preview/edge", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      voice: form.elements.tts_voice.value,
+      text: document.querySelector("#voicePreviewText").value,
+    }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || `Preview failed: ${response.status}`);
+  }
+  const blob = await response.blob();
+  if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
+  voicePreviewUrl = URL.createObjectURL(blob);
+  const audio = document.querySelector("#voicePreview");
+  audio.src = voicePreviewUrl;
+  await audio.play();
+  setStatus("Preview playing", "saved");
 }
 
 function presetOpenAI() {
@@ -117,6 +215,22 @@ form.addEventListener("submit", (event) => {
 
 form.addEventListener("input", () => setStatus("Unsaved"));
 document.querySelector("#reload").addEventListener("click", () => loadConfig().catch(console.error));
+document.querySelector("#fetchLlmModels").addEventListener("click", () => fetchModels("llm", "#llmModels", "llm_model").catch((error) => {
+  console.error(error);
+  setStatus("Model fetch error", "error");
+}));
+document.querySelector("#fetchAsrModels").addEventListener("click", () => fetchModels("asr", "#asrModels", "asr_model").catch((error) => {
+  console.error(error);
+  setStatus("Model fetch error", "error");
+}));
+document.querySelector("#fetchVoices").addEventListener("click", () => fetchVoices().catch((error) => {
+  console.error(error);
+  setStatus("Voice fetch error", "error");
+}));
+document.querySelector("#playVoice").addEventListener("click", () => playVoicePreview().catch((error) => {
+  console.error(error);
+  setStatus("Preview error", "error");
+}));
 document.querySelector("#presetOpenAI").addEventListener("click", presetOpenAI);
 document.querySelector("#presetOpenRouter").addEventListener("click", presetOpenRouter);
 document.querySelector("#presetOllama").addEventListener("click", presetOllama);
@@ -131,7 +245,9 @@ document.querySelectorAll("[data-clear]").forEach((button) => {
   });
 });
 
-loadConfig().catch((error) => {
-  console.error(error);
-  setStatus("Load error", "error");
-});
+loadConfig()
+  .then(() => refreshProviderLists(false).catch(console.error))
+  .catch((error) => {
+    console.error(error);
+    setStatus("Load error", "error");
+  });

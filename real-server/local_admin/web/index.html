@@ -76,7 +76,11 @@
           </label>
           <label>
             Chat model
-            <input name="llm_model" placeholder="gpt-5-mini">
+            <div class="field-action">
+              <input name="llm_model" list="llmModels" placeholder="gpt-5-mini">
+              <button type="button" id="fetchLlmModels">Fetch</button>
+            </div>
+            <datalist id="llmModels"></datalist>
           </label>
           <label>
             Temperature
@@ -116,7 +120,11 @@
           </label>
           <label>
             STT model
-            <input name="asr_model" placeholder="gpt-4o-mini-transcribe">
+            <div class="field-action">
+              <input name="asr_model" list="asrModels" placeholder="gpt-4o-mini-transcribe">
+              <button type="button" id="fetchAsrModels">Fetch</button>
+            </div>
+            <datalist id="asrModels"></datalist>
           </label>
         </div>
         <label>
@@ -145,16 +153,19 @@
           </label>
           <label>
             Voice
-            <select name="tts_voice">
-              <option value="en-US-AriaNeural">en-US-AriaNeural</option>
-              <option value="en-US-JennyNeural">en-US-JennyNeural</option>
-              <option value="en-US-GuyNeural">en-US-GuyNeural</option>
-              <option value="en-GB-SoniaNeural">en-GB-SoniaNeural</option>
-              <option value="en-GB-RyanNeural">en-GB-RyanNeural</option>
-              <option value="en-AU-NatashaNeural">en-AU-NatashaNeural</option>
-              <option value="en-AU-WilliamNeural">en-AU-WilliamNeural</option>
-              <option value="ja-JP-NanamiNeural">ja-JP-NanamiNeural</option>
-            </select>
+            <div class="field-action">
+              <select name="tts_voice" id="voiceSelect">
+                <option value="en-US-AriaNeural">en-US-AriaNeural</option>
+                <option value="en-US-JennyNeural">en-US-JennyNeural</option>
+                <option value="en-US-GuyNeural">en-US-GuyNeural</option>
+                <option value="en-GB-SoniaNeural">en-GB-SoniaNeural</option>
+                <option value="en-GB-RyanNeural">en-GB-RyanNeural</option>
+                <option value="en-AU-NatashaNeural">en-AU-NatashaNeural</option>
+                <option value="en-AU-WilliamNeural">en-AU-WilliamNeural</option>
+                <option value="ja-JP-NanamiNeural">ja-JP-NanamiNeural</option>
+              </select>
+              <button type="button" id="fetchVoices">Voices</button>
+            </div>
           </label>
           <label>
             Optional API URL
@@ -173,6 +184,14 @@
           </div>
           <span class="hint" id="ttsKeyHint"></span>
         </label>
+        <label>
+          Voice preview text
+          <div class="field-action">
+            <input id="voicePreviewText" value="Hi, I am StackChan. This is my voice preview.">
+            <button type="button" id="playVoice">Play</button>
+          </div>
+        </label>
+        <audio id="voicePreview" controls></audio>
       </section>
 
       <footer class="actions">

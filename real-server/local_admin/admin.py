@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import copy
+import re
 from pathlib import Path
 from typing import Any
 
+import aiohttp
 from aiohttp import web
 from ruamel.yaml import YAML
 
@@ -201,6 +203,39 @@ def update_key(target: dict[str, Any], payload: dict[str, Any], field: str, clea
         target["api_key"] = value
 
 
+def selected_provider_config(config: dict[str, Any], provider: str) -> dict[str, Any]:
+    selected = config["selected_module"]
+    if provider == "llm":
+        return config["LLM"][selected["LLM"]]
+    if provider == "asr":
+        return config["ASR"][selected["ASR"]]
+    if provider == "tts":
+        return config["TTS"][selected["TTS"]]
+    return {}
+
+
+def models_url(base_url: str) -> str:
+    cleaned = base_url.strip().rstrip("/")
+    cleaned = re.sub(r"/audio/transcriptions$", "", cleaned)
+    cleaned = re.sub(r"/chat/completions$", "", cleaned)
+    if cleaned.endswith("/models"):
+        return cleaned
+    return f"{cleaned}/models"
+
+
+def auth_headers(api_key: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+
+def model_allowed(provider: str, model_id: str) -> bool:
+    lower = model_id.lower()
+    if provider == "asr":
+        return "transcribe" in lower or "whisper" in lower
+    if provider == "llm":
+        return not any(token in lower for token in ("embedding", "transcribe", "tts", "realtime", "image"))
+    return True
+
+
 async def index_handler(_: web.Request) -> web.FileResponse:
     return web.FileResponse(WEB_DIR / "index.html")
 
@@ -276,6 +311,96 @@ async def restart_ack_handler(_: web.Request) -> web.Response:
     return web.json_response({"restart_required": False})
 
 
+async def models_handler(request: web.Request) -> web.Response:
+    provider = request.match_info.get("provider", "llm")
+    if provider not in {"llm", "asr"}:
+        return web.json_response({"error": "unsupported provider"}, status=400)
+
+    config = read_local_config()
+    provider_config = selected_provider_config(config, provider)
+    base_url = provider_config.get("base_url") or provider_config.get("api_url") or ""
+    api_key = provider_config.get("api_key") or ""
+    if not base_url:
+        return web.json_response({"error": "missing provider URL"}, status=400)
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=12)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(models_url(base_url), headers=auth_headers(api_key)) as response:
+                payload = await response.json(content_type=None)
+                if response.status >= 400:
+                    message = payload.get("error", payload) if isinstance(payload, dict) else payload
+                    return web.json_response({"error": str(message)}, status=response.status)
+    except Exception as exc:
+        return web.json_response({"error": str(exc)}, status=502)
+
+    items = payload.get("data", []) if isinstance(payload, dict) else []
+    models = sorted(
+        {
+            str(item.get("id"))
+            for item in items
+            if isinstance(item, dict) and item.get("id") and model_allowed(provider, str(item.get("id")))
+        }
+    )
+    return web.json_response({"models": models})
+
+
+async def edge_voices_handler(_: web.Request) -> web.Response:
+    try:
+        import edge_tts
+
+        voices = await edge_tts.list_voices()
+    except Exception as exc:
+        return web.json_response({"error": str(exc)}, status=502)
+
+    english_first = sorted(
+        voices,
+        key=lambda voice: (
+            0 if str(voice.get("ShortName", "")).startswith("en-") else 1,
+            str(voice.get("Locale", "")),
+            str(voice.get("ShortName", "")),
+        ),
+    )
+    return web.json_response(
+        {
+            "voices": [
+                {
+                    "name": voice.get("ShortName", ""),
+                    "locale": voice.get("Locale", ""),
+                    "gender": voice.get("Gender", ""),
+                    "display_name": voice.get("FriendlyName", ""),
+                }
+                for voice in english_first
+                if voice.get("ShortName")
+            ]
+        }
+    )
+
+
+async def edge_voice_preview_handler(request: web.Request) -> web.StreamResponse:
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    voice = as_str(payload, "voice", "en-US-AriaNeural").strip() or "en-US-AriaNeural"
+    text = as_str(payload, "text", "Hi, I am StackChan. This is my voice preview.").strip()
+    if len(text) > 180:
+        text = text[:180]
+
+    try:
+        import edge_tts
+
+        communicate = edge_tts.Communicate(text, voice)
+        audio = bytearray()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio.extend(chunk["data"])
+    except Exception as exc:
+        return web.json_response({"error": str(exc)}, status=502)
+
+    return web.Response(body=bytes(audio), content_type="audio/mpeg")
+
+
 def setup_admin_routes(app: web.Application) -> None:
     app.add_routes(
         [
@@ -283,6 +408,9 @@ def setup_admin_routes(app: web.Application) -> None:
             web.get("/api/local-config", get_config_handler),
             web.post("/api/local-config", save_config_handler),
             web.post("/api/restart-needed", restart_ack_handler),
+            web.get("/api/provider-models/{provider}", models_handler),
+            web.get("/api/tts-voices/edge", edge_voices_handler),
+            web.post("/api/tts-preview/edge", edge_voice_preview_handler),
             web.static("/admin-assets", WEB_DIR),
         ]
     )

@@ -142,13 +142,22 @@ textarea {
   min-height: 150px;
 }
 
-.key-row, .button-row, .actions {
+.key-row, .button-row, .actions, .field-action {
   display: flex;
   gap: 10px;
 }
 
-.key-row input {
+.key-row input, .field-action input, .field-action select {
   flex: 1;
+}
+
+.field-action button {
+  flex: 0 0 auto;
+}
+
+audio {
+  width: 100%;
+  min-height: 42px;
 }
 
 button {
@@ -178,7 +187,7 @@ button.primary {
     display: grid;
   }
 
-  .key-row, .button-row, .actions {
+  .key-row, .button-row, .actions, .field-action {
     flex-wrap: wrap;
   }
 }
