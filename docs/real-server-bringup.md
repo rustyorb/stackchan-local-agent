@@ -78,6 +78,10 @@ keys back to the browser:
   models.
 - `Voices` loads the Edge TTS voice catalog.
 - `Play` generates a short Edge TTS preview through the local server.
+- `gpt-4o-mini` is the current first-working chat default for this server's
+  Chat Completions streaming path. `gpt-5-mini` is available from OpenAI, but
+  this upstream provider needs extra compatibility work before it is a safe
+  robot default.
 
 Expected OTA response:
 

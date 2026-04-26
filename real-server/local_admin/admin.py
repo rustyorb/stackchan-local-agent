@@ -59,7 +59,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "StackChanOpenAI": {
             "type": "openai",
             "base_url": "https://api.openai.com/v1",
-            "model_name": "gpt-5-mini",
+            "model_name": "gpt-4o-mini",
             "api_key": "",
             "temperature": 0.7,
             "max_tokens": 256,
@@ -275,7 +275,7 @@ async def save_config_handler(request: web.Request) -> web.Response:
     llm = config["LLM"]["StackChanOpenAI"]
     llm["type"] = "openai"
     llm["base_url"] = as_str(payload, "llm_base_url", "https://api.openai.com/v1").strip()
-    llm["model_name"] = as_str(payload, "llm_model", "gpt-5-mini").strip()
+    llm["model_name"] = as_str(payload, "llm_model", "gpt-4o-mini").strip()
     llm["temperature"] = as_float(payload, "llm_temperature", 0.7)
     llm["max_tokens"] = as_int(payload, "llm_max_tokens", 256)
     update_key(llm, payload, "llm_api_key", "clear_llm_api_key")
