@@ -15,7 +15,8 @@ self-hosted StackChan assistant.
 - `scripts/`: firmware helper scripts copied from the working StackChan fork.
 - `firmware-patches/`: local XiaoZhi firmware patch set used by the fork.
 - `third_party/dotty-stackchan/`: attribution and integration notes for the
-  Dotty project by Brett Kinny.
+  Dotty project by Brett Kinny, plus a vendored provider snapshot under
+  `third_party/dotty-stackchan/source/`.
 
 ## Goal
 
@@ -33,6 +34,22 @@ StackChan firmware
 The short-term path is to keep `bridge/server-xz` as the provisioning and
 debugging bridge, then adopt the already-working provider architecture from
 `BrettKinny/dotty-stackchan`.
+
+## Dotty Provider Snapshot
+
+Dotty provider source has been pulled into:
+
+```text
+third_party/dotty-stackchan/source/custom-providers/
+```
+
+To copy those providers into a local `xiaozhi-esp32-server` checkout:
+
+```powershell
+.\scripts\sync-dotty-providers.bat -TargetRoot U:\_Projects\xiaozhi-esp32-server
+```
+
+See `docs/dotty-provider-integration.md` for the current integration notes.
 
 ## Attribution
 

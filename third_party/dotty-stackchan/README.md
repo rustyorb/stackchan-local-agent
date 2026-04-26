@@ -22,6 +22,8 @@ Dotty already solved several hard pieces of the local StackChan pipeline:
 
 ## Files Worth Importing
 
+Imported under `source/`:
+
 - `custom-providers/openai_compat/openai_compat.py`
 - `custom-providers/asr/whisper_local.py`
 - `custom-providers/asr/fun_local.py`
@@ -29,11 +31,10 @@ Dotty already solved several hard pieces of the local StackChan pipeline:
 - `custom-providers/edge_stream/edge_stream.py`
 - `custom-providers/zeroclaw/zeroclaw.py`
 - `custom-providers/textUtils.py`
-- `.config.yaml`
+- `.config.yaml` as `source/config.upstream.yaml`
 - `SETUP.md`
-- `docs/architecture.md`
-- `docs/voice-pipeline.md`
-- `docs/protocols.md`
+- selected docs for architecture, voice pipeline, protocols, backend choices,
+  quickstart, troubleshooting, and voice catalog.
 
 ## Integration Direction
 
