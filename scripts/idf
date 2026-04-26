@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Thin wrapper that runs a single idf.py command under the ESP-IDF v5.5.4
+# PowerShell environment. Works from bash/git-bash on Windows.
+#
+#   ./firmware/idf build
+#   ./firmware/idf set-target esp32s3
+#   ./firmware/idf -p COM5 flash monitor
+set -eu
+
+PROFILE="C:\\Espressif\\tools\\Microsoft.v5.5.4.PowerShell_profile.ps1"
+FIRMWARE_DIR_WIN="$(cygpath -w "$(cd "$(dirname "$0")" && pwd)" 2>/dev/null || (cd "$(dirname "$0")" && pwd -W))"
+
+if [ "$#" -eq 0 ]; then
+  echo "usage: $0 <idf.py args>" >&2
+  exit 2
+fi
+
+# Quote each arg for PowerShell. Backticks escape quotes inside values.
+PS_ARGS=""
+for a in "$@"; do
+  esc=${a//\`/\`\`}
+  esc=${esc//\"/\`\"}
+  PS_ARGS+=" \"$esc\""
+done
+
+# Strip env vars that would sabotage the profile:
+#   MSYSTEM / MSYSCON / MSYS - pwsh launched from git-bash inherits these;
+#     idf.py bails out with "MSys/Mingw is no longer supported" when it sees
+#     them.
+#   VIRTUAL_ENV / _OLD_VIRTUAL_PATH / VIRTUAL_ENV_PROMPT - an already-active
+#     Python venv leaks these. The venv Activate.ps1 called by the IDF profile
+#     runs `deactivate -nondestructive` first, which restores PATH from
+#     _OLD_VIRTUAL_PATH and wipes the IDF-specific toolchain paths the profile
+#     just prepended.
+CLEAN_ENV="Remove-Item env:MSYSTEM -ErrorAction SilentlyContinue ; Remove-Item env:MSYSCON -ErrorAction SilentlyContinue ; Remove-Item env:MSYS -ErrorAction SilentlyContinue ; Remove-Item env:VIRTUAL_ENV -ErrorAction SilentlyContinue ; Remove-Item env:_OLD_VIRTUAL_PATH -ErrorAction SilentlyContinue ; Remove-Item env:VIRTUAL_ENV_PROMPT -ErrorAction SilentlyContinue"
+exec pwsh -NoProfile -NoLogo -Command "$CLEAN_ENV ; . '$PROFILE' | Out-Null ; Set-Location -LiteralPath '$FIRMWARE_DIR_WIN' ; idf.py $PS_ARGS"

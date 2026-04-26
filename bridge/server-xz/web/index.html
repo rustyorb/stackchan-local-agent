@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StackChan Bridge</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Local StackChan Bridge</p>
+        <h1>Provider Control</h1>
+      </div>
+      <div class="status" id="saveStatus">Loading</div>
+    </header>
+
+    <section class="panel">
+      <div class="section-head">
+        <h2>AI Provider</h2>
+        <p>Keys stay in <code>server-xz/config.local.json</code>.</p>
+      </div>
+      <form id="configForm" autocomplete="off">
+        <div class="preset-row">
+          <button type="button" id="openAiPreset">Use OpenAI defaults</button>
+          <span>Best first test: one key for chat, STT, and TTS.</span>
+        </div>
+        <div class="grid">
+          <label>
+            Provider
+            <select name="provider">
+              <option value="stub">Stub / test mode</option>
+              <option value="openai">OpenAI-compatible</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="elevenlabs">ElevenLabs TTS</option>
+              <option value="custom">Custom HTTP</option>
+            </select>
+          </label>
+          <label>
+            API base URL
+            <input name="api_base_url" placeholder="https://api.openai.com/v1">
+          </label>
+          <label>
+            Chat model
+            <input name="model" placeholder="gpt-4.1-mini">
+          </label>
+          <label>
+            STT model
+            <input name="stt_model" placeholder="whisper-1">
+          </label>
+          <label>
+            TTS model
+            <input name="tts_model" placeholder="gpt-4o-mini-tts">
+          </label>
+          <label>
+            Voice
+            <select name="voice">
+              <option value="alloy">alloy</option>
+              <option value="ash">ash</option>
+              <option value="ballad">ballad</option>
+              <option value="cedar">cedar</option>
+              <option value="coral">coral</option>
+              <option value="echo">echo</option>
+              <option value="fable">fable</option>
+              <option value="marin">marin</option>
+              <option value="nova">nova</option>
+              <option value="onyx">onyx</option>
+              <option value="sage">sage</option>
+              <option value="shimmer">shimmer</option>
+              <option value="verse">verse</option>
+              <option value="custom">custom</option>
+            </select>
+          </label>
+        </div>
+
+        <label>
+          API key
+          <div class="key-row">
+            <input name="api_key" type="password" placeholder="Leave blank to keep existing key">
+            <button type="button" id="clearKey">Clear</button>
+          </div>
+          <span class="hint" id="keyHint">No key saved</span>
+        </label>
+
+        <div class="section-head compact">
+          <h2>Agent</h2>
+          <p>This is the name and prompt the bridge will use when the real model path is wired.</p>
+        </div>
+        <label>
+          Agent name
+          <input name="agent_name" placeholder="StackChan">
+        </label>
+        <label>
+          System prompt
+          <textarea name="system_prompt" rows="7"></textarea>
+        </label>
+
+        <div class="actions">
+          <button type="submit" class="primary">Save Config</button>
+          <button type="button" id="reloadConfig">Reload</button>
+        </div>
+      </form>
+    </section>
+  </main>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

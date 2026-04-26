@@ -1,0 +1,84 @@
+server:
+  ip: 0.0.0.0
+  port: 8000
+  http_port: 8003
+  websocket: ws://192.168.0.250:8000/xiaozhi/v1/
+  timezone_offset: -4
+
+log:
+  log_level: INFO
+
+delete_audio: true
+
+selected_module:
+  VAD: SileroVAD
+  ASR: WhisperLocal
+  LLM: OpenAICompat
+  TTS: StreamingEdgeTTS
+  Memory: nomem
+  Intent: nointent
+
+prompt: |
+  You are StackChan, a small desktop robot assistant.
+  Keep replies short, natural, and TTS-friendly.
+  Always begin with exactly one supported emotion emoji:
+  😊 😆 😢 😮 🤔 😠 😐 😍 😴
+  Do not use markdown, lists, code blocks, or long paragraphs.
+
+VAD:
+  SileroVAD:
+    type: silero
+    threshold: 0.5
+    threshold_low: 0.3
+    model_dir: models/snakers4_silero-vad
+    min_silence_duration_ms: 700
+
+ASR:
+  WhisperLocal:
+    type: whisper_local
+    model_dir: models/whisper-small.en-ct2
+    output_dir: tmp/
+    language: en
+    model_size: small.en
+    device: cpu
+    compute_type: int8
+    beam_size: 1
+    cpu_threads: 0
+    initial_prompt: null
+  FunASR:
+    type: fun_local
+    model_dir: models/SenseVoiceSmall
+    output_dir: tmp/
+    language: en
+
+TTS:
+  StreamingEdgeTTS:
+    type: edge_stream
+    voice: en-US-AriaNeural
+    output_dir: tmp/
+  LocalPiper:
+    type: piper_local
+    voice: en_GB-cori-medium
+    model_path: /opt/xiaozhi-esp32-server/models/piper/en_GB-cori-medium.onnx
+    config_path: /opt/xiaozhi-esp32-server/models/piper/en_GB-cori-medium.onnx.json
+    output_dir: tmp/
+
+LLM:
+  OpenAICompat:
+    type: openai_compat
+    url: https://api.openai.com/v1
+    api_key: ${OPENAI_API_KEY}
+    model: gpt-5-mini
+    persona_file: personas/default.md
+    max_tokens: 256
+    temperature: 0.7
+    timeout: 60
+  OpenRouterCompat:
+    type: openai_compat
+    url: https://openrouter.ai/api/v1
+    api_key: ${OPENROUTER_API_KEY}
+    model: openai/gpt-4o-mini
+    persona_file: personas/default.md
+    max_tokens: 256
+    temperature: 0.7
+    timeout: 60
