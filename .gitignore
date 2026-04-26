@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .venv/
 logs/
+.runtime/
 
 # Local runtime state
 bridge/server-xz/.stackchan-xz.pid

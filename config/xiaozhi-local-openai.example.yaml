@@ -1,0 +1,75 @@
+server:
+  ip: 0.0.0.0
+  port: 8000
+  http_port: 8003
+  websocket: ws://192.168.0.250:8000/xiaozhi/v1/
+  vision_explain: http://192.168.0.250:8003/mcp/vision/explain
+  auth_key: change-this-local-dev-auth-key
+
+manager-api:
+  url: ""
+  secret: ""
+
+log:
+  log_level: INFO
+  log_dir: tmp
+
+delete_audio: true
+
+prompt: |
+  You are StackChan, a small desktop robot assistant.
+  Keep replies short, natural, and TTS-friendly.
+  Always begin with exactly one supported emotion emoji:
+  😊 😆 😢 😮 🤔 😠 😐 😍 😴
+  Do not use markdown, lists, code blocks, or long paragraphs.
+
+selected_module:
+  VAD: SileroVAD
+  ASR: OpenaiASR
+  LLM: StackChanOpenAI
+  VLLM: ChatGLMVLLM
+  TTS: EdgeTTS
+  Memory: nomem
+  Intent: nointent
+
+ASR:
+  OpenaiASR:
+    type: openai
+    api_key: ${OPENAI_API_KEY}
+    base_url: https://api.openai.com/v1/audio/transcriptions
+    model_name: gpt-4o-mini-transcribe
+    output_dir: tmp/
+
+LLM:
+  StackChanOpenAI:
+    type: openai
+    base_url: https://api.openai.com/v1
+    model_name: gpt-5-mini
+    api_key: ${OPENAI_API_KEY}
+    temperature: 0.7
+    max_tokens: 256
+    top_p: 1
+    frequency_penalty: 0
+
+TTS:
+  EdgeTTS:
+    type: edge
+    voice: en-US-AriaNeural
+    output_dir: tmp/
+    format: mp3
+
+VAD:
+  SileroVAD:
+    type: silero
+    threshold: 0.5
+    threshold_low: 0.3
+    model_dir: models/snakers4_silero-vad
+    min_silence_duration_ms: 700
+
+Intent:
+  nointent:
+    type: nointent
+
+Memory:
+  nomem:
+    type: nomem

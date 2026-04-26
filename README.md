@@ -51,6 +51,23 @@ To copy those providers into a local `xiaozhi-esp32-server` checkout:
 
 See `docs/dotty-provider-integration.md` for the current integration notes.
 
+## Real Server Checkpoint
+
+The current real-server bring-up is documented in:
+
+```text
+docs/real-server-bringup.md
+```
+
+Start the real XiaoZhi server with:
+
+```powershell
+.\scripts\start-real-server.bat
+```
+
+It serves OTA on `http://192.168.0.250:8003/xiaozhi/ota/` and WebSocket on
+`ws://192.168.0.250:8000/xiaozhi/v1/`.
+
 ## Attribution
 
 This project includes work inspired by and/or derived from:
