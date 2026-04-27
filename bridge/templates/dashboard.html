@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark"
+      hx-on:htmx:load="(function(){var t=localStorage.getItem('dotty-theme'); if(t){document.documentElement.setAttribute('data-theme',t);}})()">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d232a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="/ui/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/ui/icon.svg">
+<link rel="apple-touch-icon" href="/ui/apple-touch-icon.png">
+<title>Dotty Dashboard</title>
+<script src="/ui/static/htmx.min.js"
+        integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
+        crossorigin="anonymous" defer></script>
+<link href="/ui/static/tailwind.min.css" rel="stylesheet"
+      integrity="sha384-8XNMbtVzGCmDvgyHxA00gw2TvN2Uv+CFlfgv7ottHeJNaxHVAexDpb2o3R70Odcz"
+      crossorigin="anonymous">
+<style>
+  html, body { -webkit-tap-highlight-color: transparent; }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .status-dot { width: 10px; height: 10px; border-radius: 9999px; flex-shrink: 0; display: inline-block; }
+  .status-ok { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+  .status-warn { background: #f59e0b; box-shadow: 0 0 8px rgba(245,158,11,0.5); }
+  .status-bad { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
+  .status-unknown { background: #6b7280; }
+  .htmx-request .spin-on-load { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .dotty-alert { padding-top: 0.5rem; padding-bottom: 0.5rem; font-size: 0.875rem; line-height: 1.25rem; }
+
+  /* Activity-feed filter chips. The data-filter attribute on .feed-rows
+     hides rows of the wrong kind via CSS — no per-row JS, no re-fetch on
+     filter change. */
+  .feed-rows[data-filter="turns"]  .feed-row[data-kind="event"] { display: none; }
+  .feed-rows[data-filter="events"] .feed-row[data-kind="turn"]  { display: none; }
+  .feed-rows[data-filter="errors"] .feed-row[data-error="false"] { display: none; }
+  /* Native <details>-based dropdown — strip the disclosure triangle so
+     the trigger reads as a button. (DaisyUI's CDN build sometimes ships
+     without the dropdown plugin's hide-by-default rule.) */
+  summary { list-style: none; cursor: pointer; }
+  summary::-webkit-details-marker { display: none; }
+  summary::marker { display: none; content: ""; }
+  /* Pop the dropdown content out as a floating card instead of expanding
+     the navbar inline. */
+  details.dropdown { position: relative; }
+  details.dropdown > .dropdown-content {
+    position: absolute; top: 100%; margin-top: 0.25rem;
+    z-index: 50; min-width: 14rem;
+  }
+  details.dropdown.dropdown-end > .dropdown-content { right: 0; }
+  /* Single-page layout. Body fills the viewport exactly; the feed section
+     grows to fill the leftover space and scrolls internally so it can
+     never push the footer off-screen. The bundled Tailwind here doesn't
+     ship `gap-6` reliably, so we set the section gap in plain CSS. */
+  html, body { height: 100%; }
+  body.dotty-body { display: flex; flex-direction: column; overflow: hidden; }
+  main.dotty-main {
+    flex: 1 1 auto; min-height: 0;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    gap: 1.5rem;
+  }
+  .dotty-feed-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .dotty-feed-section > .card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .dotty-feed-section > .card > .card-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .dotty-feed-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; position: relative; }
+  /* Empty-state hero is absolutely-positioned so it sits dead-centre in
+     the feed regardless of how tall the feed is. JS removes it the moment
+     the first row arrives. */
+  #feed-empty {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 0.5rem;
+    pointer-events: none;
+  }
+  /* Dance state — rainbow dot, rotating slowly. */
+  @keyframes dotty-rainbow-spin { to { transform: rotate(360deg); } }
+  .dotty-led-rainbow {
+    background: conic-gradient(#ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444);
+    animation: dotty-rainbow-spin 3s linear infinite;
+  }
+  /* State + Faces share a row so the cards are the same height. */
+  .dotty-equal-rows {
+    display: grid; grid-template-columns: 1fr;
+    gap: 1.5rem; grid-auto-rows: 1fr;
+  }
+  .dotty-equal-rows > .card { display: flex; flex-direction: column; }
+  .dotty-equal-rows > .card > .card-body { flex: 1 1 auto; }
+</style>
+</head>
+<body class="dotty-body bg-base-200">
+
+{% include "_svg_defs.html" %}
+
+<header class="navbar bg-base-100 sticky top-0 z-20 shadow-sm safe-top gap-2 flex-none">
+  <div class="flex-1 px-2 flex items-center gap-3 min-w-0">
+    <svg class="w-9 h-9 flex-shrink-0" aria-hidden="true"><use href="#dotty-icon"/></svg>
+    <span class="text-lg font-semibold tracking-tight">Dotty</span>
+    <span id="alerts-badge" data-poll
+          hx-get="/ui/alerts/count" hx-trigger="load, every 30s, dotty-refresh from:window"
+          hx-swap="innerHTML"></span>
+    <span id="status-strip-header" data-poll
+          hx-get="/ui/status-strip?placement=header"
+          hx-trigger="load, every 10s, dotty-refresh from:window"
+          hx-swap="innerHTML"
+          class="ml-2 inline-flex items-center"></span>
+  </div>
+  <div class="flex-none flex items-center gap-1">
+    <details class="dropdown dropdown-end" id="gear-dropdown">
+      <summary class="btn btn-ghost btn-sm btn-circle list-none"
+               aria-label="More actions">
+        <span class="text-lg leading-none">⋮</span>
+      </summary>
+      {% include "_gear_menu.html" %}
+    </details>
+  </div>
+</header>
+
+<div id="connection-banner" class="alert alert-warning rounded-none py-1 px-3 hidden flex-none" role="status" aria-live="polite">
+  <span id="connection-banner-msg" class="text-sm"></span>
+</div>
+
+<main class="dotty-main p-4 max-w-5xl w-full mx-auto">
+
+  <section>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div id="kid-card-body" class="card bg-base-100 shadow-sm overflow-hidden"
+           hx-get="/ui/kid-mode" hx-trigger="load" hx-swap="outerHTML"
+           hx-target="this">
+        <div class="card-body p-3 animate-pulse">
+          <div class="h-4 bg-base-300 rounded w-1/4"></div>
+        </div>
+      </div>
+      <div id="smart-card-body" class="card bg-base-100 shadow-sm overflow-hidden"
+           hx-get="/ui/smart-mode" hx-trigger="load" hx-swap="outerHTML"
+           hx-target="this">
+        <div class="card-body p-3 animate-pulse">
+          <div class="h-4 bg-base-300 rounded w-1/4"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="dotty-equal-rows">
+    <div id="state-card-body" class="card bg-base-100 shadow-sm overflow-hidden"
+         hx-get="/ui/state" hx-trigger="load, every 5s" hx-swap="outerHTML"
+         hx-target="this">
+      <div class="card-body p-3 animate-pulse">
+        <div class="h-4 bg-base-300 rounded w-1/4"></div>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-3">
+        <div class="text-xs text-base-content/60 mb-2 px-1">Emojis</div>
+        <div class="flex gap-1 w-full flex-1 items-center">
+          {% for e in ["😊","😆","😢","😮","🤔","😠","😐","😍","😴"] %}
+          <form hx-post="/ui/actions/mood" hx-target="#mood-result" hx-swap="afterbegin"
+                hx-disabled-elt="find button"
+                class="flex-1">
+            <input type="hidden" name="emoji" value="{{ e }}">
+            <button type="submit" class="btn btn-ghost text-lg min-h-9 w-full p-0">{{ e }}</button>
+          </form>
+          {% endfor %}
+        </div>
+        <div id="mood-result" class="mt-2 empty:hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="say-section" hidden>
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-3">
+        <div class="text-xs text-base-content/60 mb-2 px-1">Say something</div>
+        <form hx-post="/ui/actions/say" hx-target="#say-result" hx-swap="innerHTML"
+              hx-disabled-elt="find button, find input"
+              hx-on::after-request="if(event.detail.successful)this.reset()"
+              class="flex flex-col sm:flex-row gap-2">
+          <input type="text" name="text" placeholder="Type something for Dotty to say…"
+                 class="input input-bordered flex-1" maxlength="500" autocomplete="off"
+                 enterkeyhint="send" required>
+          <button type="submit" class="btn btn-primary min-h-12">Send</button>
+        </form>
+        <div id="say-result" class="mt-2 empty:hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="dance-section" hidden>
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body p-3">
+        <div class="text-xs text-base-content/60 mb-2 px-1">Dance &amp; sing</div>
+        <form hx-post="/ui/actions/dance" hx-target="#dance-result" hx-swap="afterbegin"
+              hx-disabled-elt="find button">
+          <button class="btn btn-outline w-full min-h-12">💃🎤 Dance &amp; sing</button>
+        </form>
+        <div class="text-xs text-base-content/50 mt-3 mb-1 px-1">Or play a specific track</div>
+        <div id="songs-list" hx-get="/ui/songs"
+             hx-trigger="load, every 30s"
+             hx-swap="innerHTML">
+          <div class="text-xs text-base-content/40 text-center py-2">Loading…</div>
+        </div>
+        <div id="dance-result" class="mt-2 empty:hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="dotty-feed-section">
+    <div class="card bg-base-100 shadow-sm overflow-hidden">
+      <div class="card-body p-0">
+        <div class="px-3 pt-3 pb-2 flex items-center gap-2 flex-wrap border-b border-base-300 flex-none">
+          <div role="tablist" class="join" id="feed-filters">
+            <button type="button" data-feed-filter="all"
+                    class="join-item btn btn-xs btn-active">All</button>
+            <button type="button" data-feed-filter="turns"
+                    class="join-item btn btn-xs">Turns</button>
+            <button type="button" data-feed-filter="events"
+                    class="join-item btn btn-xs">Events</button>
+            <button type="button" data-feed-filter="errors"
+                    class="join-item btn btn-xs">Errors</button>
+          </div>
+        </div>
+        <div id="feed-live" class="feed-rows dotty-feed-scroll divide-y divide-base-300"
+             data-filter="all">
+          <div id="feed-empty" class="flex flex-col items-center text-center px-6 py-8 gap-2">
+            <svg class="w-20 h-20 opacity-50" aria-hidden="true"><use href="#dotty-hero"/></svg>
+            <div class="text-sm text-base-content/50">Waiting for the next turn…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer id="status-strip-footer"
+        class="bg-base-100 border-t border-base-300 flex-none"
+        hx-get="/ui/status-strip?placement=footer"
+        hx-trigger="load, every 15s, dotty-refresh from:window"
+        hx-swap="innerHTML">
+  <div class="text-xs text-base-content/40 text-center py-2 px-3">…</div>
+</footer>
+
+<div id="error-toast" class="toast toast-top toast-center hidden z-50">
+  <div class="alert alert-error">
+    <span id="error-toast-msg"></span>
+  </div>
+</div>
+
+<dialog id="alerts-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="text-lg font-semibold mb-2">Errored turns today</h3>
+    <div id="alerts-modal-content"></div>
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<dialog id="host-modal" class="modal">
+  <div class="modal-box max-w-md">
+    <div id="host-modal-body">
+      <div class="text-sm text-base-content/50">Loading…</div>
+    </div>
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<dialog id="vision-modal" class="modal">
+  <div class="modal-box max-w-2xl">
+    <h3 class="text-lg font-semibold mb-2">Latest vision capture</h3>
+    <div id="vision-modal-body">
+      <div class="text-sm text-base-content/50">Loading…</div>
+    </div>
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-sm">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<dialog id="update-modal" class="modal">
+  <div class="modal-box max-w-2xl">
+    <div id="update-modal-content">
+      <div class="text-sm text-base-content/50">Loading update preview…</div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<div id="restart-result" class="hidden"></div>
+
+<script>
+  // Conditional reveal: state.html dispatches `dotty-state-change` after
+  // each htmx swap. Show Say-Something while in talk/story_time, Dance &
+  // Sing while in dance, hide otherwise.
+  document.addEventListener('dotty-state-change', function (e) {
+    var s = (e.detail && e.detail.state) || 'idle';
+    var say = document.getElementById('say-section');
+    var dance = document.getElementById('dance-section');
+    if (say)   say.hidden   = !(s === 'talk' || s === 'story_time');
+    if (dance) dance.hidden = !(s === 'dance');
+  });
+
+  // Close the gear dropdown when an item is clicked or the menu loses
+  // focus. <details> doesn't auto-close like daisyUI's :focus-within
+  // dropdown — wire it manually.
+  (function () {
+    var dd = document.getElementById('gear-dropdown');
+    if (!dd) return;
+    dd.addEventListener('click', function (e) {
+      if (e.target.closest('[data-gear-item]')) dd.removeAttribute('open');
+    });
+    document.addEventListener('click', function (e) {
+      if (dd.hasAttribute('open') && !dd.contains(e.target)) {
+        dd.removeAttribute('open');
+      }
+    });
+  })();
+
+  // Connection banner — driven by SSE state primarily, with htmx errors as
+  // a secondary signal. SSE drop usually means the bridge is restarting.
+  var connState = {sse: true, http: true};
+  function refreshConnectionBanner() {
+    var b = document.getElementById('connection-banner');
+    var m = document.getElementById('connection-banner-msg');
+    if (!b || !m) return;
+    if (!connState.sse) {
+      m.textContent = 'Reconnecting to bridge…';
+      b.classList.remove('hidden');
+    } else if (!connState.http) {
+      m.textContent = 'Bridge request failed — retrying…';
+      b.classList.remove('hidden');
+    } else {
+      b.classList.add('hidden');
+    }
+  }
+  document.body.addEventListener('htmx:sendError', function () {
+    connState.http = false; refreshConnectionBanner();
+  });
+  document.body.addEventListener('htmx:responseError', function () {
+    connState.http = false; refreshConnectionBanner();
+  });
+  document.body.addEventListener('htmx:afterRequest', function (evt) {
+    if (evt.detail && evt.detail.successful) {
+      connState.http = true; refreshConnectionBanner();
+    }
+  });
+
+  // Clipboard copy with execCommand fallback for non-secure contexts (LAN
+  // URL is plain http, navigator.clipboard rejects).
+  window.dottyCopy = function (btn, text) {
+    var label = btn.textContent;
+    function ok()   { btn.textContent = 'copied';  setTimeout(function () { btn.textContent = label; }, 1200); }
+    function fail() { btn.textContent = 'failed';  setTimeout(function () { btn.textContent = label; }, 1500); }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(ok, fallback);
+    } else {
+      fallback();
+    }
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        var done = document.execCommand('copy');
+        document.body.removeChild(ta);
+        done ? ok() : fail();
+      } catch (e) { fail(); }
+    }
+  };
+
+  // Cap mood / dance result stacks at 3 entries; oldest evicted.
+  document.body.addEventListener('htmx:afterSwap', function (evt) {
+    var t = evt.detail && evt.detail.target;
+    if (!t || !t.id) return;
+    if (t.id !== 'mood-result' && t.id !== 'dance-result') return;
+    while (t.children.length > 3) t.removeChild(t.lastElementChild);
+  });
+
+  // Activity feed — filter chips toggle a data-filter attribute on the
+  // feed container; CSS hides rows that don't match. Single live source
+  // (SSE turns + perception events); page-reload empties the view.
+  function setFeedFilter(name) {
+    document.querySelectorAll('#feed-filters [data-feed-filter]').forEach(function (b) {
+      b.classList.toggle('btn-active', b.dataset.feedFilter === name);
+    });
+    document.getElementById('feed-live').setAttribute('data-filter', name);
+  }
+  document.getElementById('feed-filters').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-feed-filter]');
+    if (!b) return;
+    setFeedFilter(b.dataset.feedFilter);
+  });
+
+  // F9 perception feed — append events into the unified activity feed.
+  var PERCEPTION_BADGE_CLASS = {
+    face_detected: 'badge-success',
+    face_lost: 'badge-error',
+    sound_event: 'badge-warning',
+    head_pet_started: 'badge-info',
+    head_pet_ended: 'badge-info',
+    state_changed: 'badge-info',
+  };
+  function prependFeedEvent(ev) {
+    var feed = document.getElementById('feed-live');
+    if (!feed) return;
+    var empty = document.getElementById('feed-empty');
+    if (empty) empty.remove();
+
+    var row = document.createElement('div');
+    row.className = 'feed-row px-3 py-2';
+    row.setAttribute('data-kind', 'event');
+    row.setAttribute('data-error', 'false');
+
+    var head = document.createElement('div');
+    head.className = 'flex items-baseline gap-2 flex-wrap';
+
+    var ts = document.createElement('span');
+    ts.className = 'text-xs text-base-content/50 font-mono';
+    var d = new Date((ev.ts || (Date.now() / 1000)) * 1000);
+    ts.textContent = d.toLocaleTimeString();
+    head.appendChild(ts);
+
+    var badge = document.createElement('span');
+    badge.className = 'badge badge-xs ' + (PERCEPTION_BADGE_CLASS[ev.name] || 'badge-ghost');
+    badge.textContent = ev.name || 'event';
+    head.appendChild(badge);
+
+    if (ev.device_id) {
+      var dev = document.createElement('span');
+      dev.className = 'text-xs text-base-content/50 font-mono';
+      dev.textContent = ev.device_id;
+      head.appendChild(dev);
+    }
+    row.appendChild(head);
+
+    if (ev.data && Object.keys(ev.data).length > 0) {
+      var data = document.createElement('div');
+      data.className = 'text-xs text-base-content/60 break-words mt-1 font-mono';
+      data.textContent = JSON.stringify(ev.data);
+      row.appendChild(data);
+    }
+
+    feed.insertBefore(row, feed.firstChild);
+    while (feed.children.length > 100) feed.removeChild(feed.lastElementChild);
+  }
+  (function () {
+    if (typeof EventSource === 'undefined') return;
+    var psrc = new EventSource('/api/perception/feed');
+    psrc.onmessage = function (ev) {
+      var data;
+      try { data = JSON.parse(ev.data); } catch (e) { return; }
+      prependFeedEvent(data);
+    };
+  })();
+
+  // Turn stream — append turns into the unified activity feed and surface
+  // failures as a toast.
+  function prependFeedTurn(data) {
+    var feed = document.getElementById('feed-live');
+    if (!feed) return;
+    var empty = document.getElementById('feed-empty');
+    if (empty) empty.remove();
+
+    var row = document.createElement('div');
+    row.className = 'feed-row px-3 py-2';
+    row.setAttribute('data-kind', 'turn');
+    row.setAttribute('data-error', data.error ? 'true' : 'false');
+
+    var head = document.createElement('div');
+    head.className = 'flex items-baseline gap-2 flex-wrap';
+    var ts = document.createElement('span');
+    ts.className = 'text-xs text-base-content/50 font-mono';
+    var d = new Date((data.ts || (Date.now() / 1000)) * 1000);
+    ts.textContent = d.toLocaleTimeString();
+    head.appendChild(ts);
+
+    var kind = document.createElement('span');
+    kind.className = 'badge badge-ghost badge-xs';
+    kind.textContent = 'turn';
+    head.appendChild(kind);
+
+    if (data.channel) {
+      var ch = document.createElement('span');
+      ch.className = 'badge badge-ghost badge-xs';
+      ch.textContent = data.channel;
+      head.appendChild(ch);
+    }
+    if (data.error) {
+      var er = document.createElement('span');
+      er.className = 'badge badge-error badge-xs';
+      er.textContent = 'err';
+      head.appendChild(er);
+    }
+    if (typeof data.latency_ms === 'number') {
+      var lat = document.createElement('span');
+      lat.className = 'text-xs text-base-content/40 ml-auto';
+      lat.textContent = data.latency_ms + 'ms';
+      head.appendChild(lat);
+    }
+    row.appendChild(head);
+
+    var req = document.createElement('div');
+    req.className = 'text-sm break-words mt-1';
+    req.textContent = '🗨 ' + (data.request_text || '(no input)');
+    row.appendChild(req);
+
+    if (data.error) {
+      var errLine = document.createElement('div');
+      errLine.className = 'text-sm text-error break-words whitespace-pre-wrap mt-1';
+      errLine.textContent = '⚠ ' + String(data.error);
+      row.appendChild(errLine);
+    } else {
+      var resp = document.createElement('div');
+      resp.className = 'text-sm text-base-content/80 break-words whitespace-pre-wrap mt-1';
+      var emoji = data.emoji_used ? (data.emoji_used + ' ') : '';
+      resp.textContent = emoji + (data.response_text || '');
+      row.appendChild(resp);
+    }
+
+    feed.insertBefore(row, feed.firstChild);
+    while (feed.children.length > 100) feed.removeChild(feed.lastElementChild);
+  }
+  (function () {
+    if (typeof EventSource === 'undefined') return;
+    var src = new EventSource('/ui/events');
+    src.onopen = function () { connState.sse = true; refreshConnectionBanner(); };
+    src.onmessage = function (ev) {
+      var data;
+      try { data = JSON.parse(ev.data); } catch (e) { return; }
+      prependFeedTurn(data);
+      // Trigger refresh on polling tiles (status-strip, etc.) so they
+      // pick up new state immediately on every turn.
+      window.dispatchEvent(new CustomEvent('dotty-refresh'));
+      if (data && data.error) {
+        var toast = document.getElementById('error-toast');
+        var msg = document.getElementById('error-toast-msg');
+        if (toast && msg) {
+          msg.textContent = 'Dotty error: ' + String(data.error);
+          toast.classList.remove('hidden');
+          setTimeout(function () { toast.classList.add('hidden'); }, 8000);
+        }
+      }
+    };
+    src.onerror = function () {
+      connState.sse = false; refreshConnectionBanner();
+    };
+  })();
+</script>
+
+</body>
+</html>
