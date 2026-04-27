@@ -1,0 +1,78 @@
+# xiaozhi-esp32-server live config — bind-mounted into the container at
+# /opt/xiaozhi-esp32-server/data/.config.yaml by docker-compose.yml.
+#
+# This is the FIRST-BOOT config: cloud STT/TTS so no model files needed.
+# Once it's talking, swap WhisperLocal/Piper for fully-local pipelines.
+
+server:
+  ip: 0.0.0.0
+  port: 8000
+  http_port: 8003
+  # Override with your LAN IP after pairing — the firmware needs to be
+  # told a routable URL by OTA. 127.0.0.1 only works for in-container tests.
+  websocket: ws://127.0.0.1:8000/xiaozhi/v1/
+
+log:
+  log_level: INFO
+
+delete_audio: true
+
+selected_module:
+  VAD: SileroVAD
+  ASR: OpenaiASR        # cloud first; swap for FunASR / WhisperLocal once models land
+  LLM: StackChanBridge  # relays all turns to bridge.py at host.docker.internal:8080
+  TTS: EdgeTTS          # cloud-free Microsoft Edge voices; swap for LocalPiper later
+  Memory: nomem
+  Intent: nointent
+
+# Belt-and-braces system prompt — bridge.py also injects the persona, but
+# this is the layer xiaozhi-server hands the LLM provider as a system
+# message. Fallback if the bridge ever returns plain text without prefix.
+prompt: |
+  You are a small desk robot. Reply in plain spoken English.
+  Always begin with exactly one supported emotion emoji:
+  😊 😆 😢 😮 🤔 😠 😐 😍 😴
+  No markdown, no lists, no code blocks. 1-2 short sentences default.
+
+VAD:
+  SileroVAD:
+    type: silero
+    threshold: 0.5
+    threshold_low: 0.3
+    model_dir: models/snakers4_silero-vad
+    min_silence_duration_ms: 700
+
+ASR:
+  OpenaiASR:
+    type: openai
+    base_url: https://api.openai.com/v1/audio/transcriptions
+    api_key: ${OPENAI_API_KEY}
+    model_name: gpt-4o-mini-transcribe
+    output_dir: tmp/
+
+TTS:
+  EdgeTTS:
+    type: edge
+    voice: en-US-AriaNeural   # swap to en-US-ChristopherNeural / en-GB-RyanNeural for variety
+    output_dir: tmp/
+    format: mp3
+
+LLM:
+  StackChanBridge:
+    # Provider lives at core/providers/llm/zeroclaw/zeroclaw.py inside the
+    # container (volume-mounted from custom-providers/zeroclaw/). The class
+    # is just an HTTP relay — POSTs voice turns to /api/message/stream on
+    # the bridge and streams chunks back. The historical "zeroclaw" name
+    # is misleading; this fork uses it as a plain bridge proxy.
+    type: zeroclaw
+    url: http://host.docker.internal:8080/api/message/stream
+    timeout: 90
+    channel: dotty
+
+Intent:
+  nointent:
+    type: nointent
+
+Memory:
+  nomem:
+    type: nomem

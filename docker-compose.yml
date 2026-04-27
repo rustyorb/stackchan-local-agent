@@ -1,0 +1,45 @@
+services:
+  # Upstream xiaozhi-esp32-server. Use the published image directly for
+  # first boot — switch to `build: { context: . }` later if you want to
+  # bake in Piper / faster-whisper / fluidsynth (see dotty's Dockerfile
+  # for the recipe).
+  xiaozhi-esp32-server:
+    image: ghcr.io/xinnan-tech/xiaozhi-esp32-server:server_latest
+    container_name: xiaozhi-esp32-server
+    restart: unless-stopped
+    # Read shared secrets from the host's .env.local — same file the bridge
+    # uses. Variables referenced as ${...} in the YAML below get substituted
+    # at compose time; vars passed verbatim show up in the container env.
+    env_file:
+      - .env.local
+    environment:
+      - TZ=${TZ:-America/New_York}
+      # Bridge URL the in-container vision intent handler POSTs to. The
+      # bridge runs on the Windows HOST, so we use host.docker.internal.
+      - VISION_BRIDGE_URL=http://host.docker.internal:8080
+      # ASR (OpenaiASR provider) reads OPENAI_API_KEY at startup.
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    extra_hosts:
+      # Required so containerized xiaozhi can reach the bridge running
+      # natively on the Windows host (Docker Desktop already maps this
+      # but explicit is safer if/when we move to Linux).
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"   # WebSocket (StackChan firmware connects here)
+      - "8003:8003"   # OTA + admin HTTP
+    volumes:
+      # Live config — edit on host, restart container to pick up.
+      - ./config/xiaozhi-stackchan.yaml:/opt/xiaozhi-esp32-server/data/.config.yaml:ro
+      # Custom LLM provider — relays voice turns to the bridge.
+      - ./custom-providers/openai_compat:/opt/xiaozhi-esp32-server/core/providers/llm/openai_compat:ro
+      - ./custom-providers/zeroclaw:/opt/xiaozhi-esp32-server/core/providers/llm/zeroclaw:ro
+      # Shared text utilities — emoji/format constants the providers + bridge
+      # both reference.
+      - ./custom-providers/textUtils.py:/opt/xiaozhi-esp32-server/core/utils/textUtils.py:ro
+      # Personas — read by the openai_compat / zeroclaw providers at request
+      # time so persona swap is zero-restart.
+      - ./personas:/opt/xiaozhi-esp32-server/personas:ro
+      # OTA artifacts — drop firmware .bin files here; device polls + flashes.
+      - ./data/bin:/opt/xiaozhi-esp32-server/data/bin
+      # Working dir for ASR/TTS scratch files.
+      - ./tmp:/opt/xiaozhi-esp32-server/tmp
