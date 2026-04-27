@@ -1,0 +1,15 @@
+# Build-time overrides applied on top of upstream xiaozhi-esp32's sdkconfig
+# defaults + the m5stack-core-s3 board's sdkconfig_append.
+#
+# Copied into firmware/xiaozhi-esp32/sdkconfig.local by build.bat before
+# every build, so the upstream tree stays clean while our overrides are
+# tracked in git.
+#
+# Adjust DEFAULT_LAN_IP in build.bat (or pass LAN_IP=...) if your Windows
+# host's LAN IP changes — the OTA URL must be reachable from the device.
+
+# Point the firmware's OTA-fetch at our local xiaozhi-esp32-server (Docker
+# container on this Windows host). On boot, the device GETs this URL and
+# the response carries the WebSocket address it should connect to. Our
+# xiaozhi-server returns ws://<LAN_IP>:8000/xiaozhi/v1/ from the same host.
+CONFIG_OTA_URL="http://__LAN_IP__:8003/xiaozhi/ota/"
