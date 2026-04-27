@@ -5,15 +5,22 @@ __pycache__/
 logs/
 .runtime/
 
-# Local runtime state
-bridge/server-xz/.stackchan-xz.pid
-bridge/server-xz/.stackchan-xz.log
-bridge/server-xz/.stackchan-xz.err.log
-bridge/server-xz/.stackchan-xz-node.pid
-bridge/server-xz/.stackchan-xz-node.log
-bridge/server-xz/.stackchan-xz-node.err.log
-bridge/server-xz/config.local.json
-bridge/server-xz/__pycache__/
+# Local runtime state — ota-shim
+ota-shim/.stackchan-xz.pid
+ota-shim/.stackchan-xz.log
+ota-shim/.stackchan-xz.err.log
+ota-shim/.stackchan-xz-node.pid
+ota-shim/.stackchan-xz-node.log
+ota-shim/.stackchan-xz-node.err.log
+ota-shim/config.local.json
+ota-shim/__pycache__/
+
+# Local runtime state — bridge
+bridge/__pycache__/
+bridge/state/
+bridge/logs/
+.env
+.env.local
 
 # Local provisioning artifacts
 scripts/stackchan-tools/.provision-tmp/
