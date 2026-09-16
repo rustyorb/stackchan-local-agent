@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
+from bridge.host_settings import HostSettings, SettingsStore, write_server_config
 
 log = logging.getLogger("dashboard")
 
@@ -158,6 +159,11 @@ XIAOZHI_HOST = os.environ.get("XIAOZHI_HOST", "")
 XIAOZHI_OTA_PORT = int(os.environ.get("XIAOZHI_OTA_PORT", "8003"))
 XIAOZHI_WS_PORT = int(os.environ.get("XIAOZHI_WS_PORT", "8000"))
 LOG_DIR = Path(os.environ.get("CONVO_LOG_DIR", "logs"))
+_REPO_ROOT = Path(__file__).parent.parent
+HOST_SETTINGS = SettingsStore(Path(os.environ.get(
+    "STAKIA_SETTINGS_PATH", _REPO_ROOT / "data/host-settings.json")))
+SERVER_CONFIG_PATH = Path(os.environ.get(
+    "STAKIA_SERVER_CONFIG", _REPO_ROOT / "data/xiaozhi.generated.yaml"))
 VOICE_CHANNELS = ("dotty", "stackchan")
 
 _START_TIME = time.time()
@@ -334,6 +340,35 @@ async def dashboard(request: Request) -> Any:
     return templates.TemplateResponse(
         request, "dashboard.html",
         {"version": BRIDGE_VERSION},
+    )
+
+
+@router.get("/host-settings", response_class=HTMLResponse, include_in_schema=False)
+async def host_settings_view(request: Request) -> Any:
+    return templates.TemplateResponse(
+        request, "host_settings.html", {"settings": HOST_SETTINGS.load(), "saved": False}
+    )
+
+
+@router.post("/host-settings", response_class=HTMLResponse, include_in_schema=False)
+async def host_settings_save(
+    request: Request,
+    profile: str = Form(...),
+    pause_seconds: float = Form(...),
+    idle_mode: str = Form(...),
+    idle_minutes: int | None = Form(None),
+    idle_farewell: str | None = Form(None),
+) -> Any:
+    idle = None if idle_mode == "never" else idle_minutes
+    settings = HostSettings(
+        active_profile=profile, pause_seconds=pause_seconds,
+        idle_minutes=idle, idle_farewell=idle_farewell == "on",
+    )
+    lan_host = os.environ.get("STAKIA_LAN_HOST", "")
+    write_server_config(settings, lan_host=lan_host, path=SERVER_CONFIG_PATH)
+    HOST_SETTINGS.save(settings)
+    return templates.TemplateResponse(
+        request, "host_settings.html", {"settings": settings, "saved": True}
     )
 
 

@@ -1,0 +1,26 @@
+<div id="host-settings" class="card bg-base-100 shadow-sm">
+  <div class="card-body p-3">
+    <div class="font-semibold">Conversation settings</div>
+    <form hx-post="/ui/host-settings" hx-target="#host-settings" hx-swap="outerHTML" class="space-y-2">
+      <label class="block text-sm">Model profile
+        <select class="select select-bordered w-full" name="profile">
+          <option value="lmstudio" {% if settings.active_profile == 'lmstudio' %}selected{% endif %}>LM Studio (local)</option>
+          <option value="openrouter" {% if settings.active_profile == 'openrouter' %}selected{% endif %}>OpenRouter (cloud)</option>
+        </select>
+      </label>
+      <label class="block text-sm">Pause before answer (seconds)
+        <input class="input input-bordered w-full" type="number" min="1" max="30" step="0.5" name="pause_seconds" value="{{ settings.pause_seconds }}">
+      </label>
+      <label class="block text-sm">Conversation idle
+        <select class="select select-bordered w-full" name="idle_mode">
+          <option value="never" {% if settings.idle_minutes is none %}selected{% endif %}>Never</option>
+          <option value="finite" {% if settings.idle_minutes is not none %}selected{% endif %}>Custom minutes</option>
+        </select>
+      </label>
+      <input class="input input-bordered w-full" type="number" min="1" max="1440" name="idle_minutes" value="{{ settings.idle_minutes or 15 }}" aria-label="Idle minutes">
+      <label class="flex gap-2 items-center text-sm"><input type="checkbox" name="idle_farewell" {% if settings.idle_farewell %}checked{% endif %}>Speak farewell before a finite idle close</label>
+      <button class="btn btn-primary btn-sm" type="submit">Save for server recreate</button>
+      {% if saved %}<div class="text-sm text-success">Saved. Recreate the voice server at a turn boundary to apply.</div>{% endif %}
+    </form>
+  </div>
+</div>

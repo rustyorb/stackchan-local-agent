@@ -125,6 +125,10 @@
 
 <main class="dotty-main p-4 max-w-5xl w-full mx-auto">
 
+  <section hx-get="/ui/host-settings" hx-trigger="load" hx-swap="innerHTML">
+    <div class="card bg-base-100 shadow-sm"><div class="card-body p-3">Loading conversation settings…</div></div>
+  </section>
+
   <section>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div id="kid-card-body" class="card bg-base-100 shadow-sm overflow-hidden"
