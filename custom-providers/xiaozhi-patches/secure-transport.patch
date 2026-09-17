@@ -1,0 +1,67 @@
+--- a/main/xiaozhi-server/core/websocket_server.py
++++ b/main/xiaozhi-server/core/websocket_server.py
+@@ -2,6 +2,7 @@
+ import logging
+ 
+ import websockets
++from core.utils.stakia_transport import authorized, server_context
+ from config.logger import setup_logging
+ 
+ 
+@@ -79,6 +80,7 @@
+             port,
+             process_request=self._http_response,
+             ping_interval=None,
++            ssl=server_context(self.config),
+         ):
+             await asyncio.Future()
+ 
+@@ -148,6 +150,8 @@
+                 )
+ 
+     async def _http_response(self, websocket, request_headers):
++        if not authorized(self.config, request_headers.headers):
++            return websocket.respond(401, "Unauthorized\n")
+         # 检查是否为 WebSocket 升级请求
+         if request_headers.headers.get("connection", "").lower() == "upgrade":
+             # 如果是 WebSocket 请求，返回 None 允许握手继续
+@@ -207,25 +211,6 @@
+             self.logger.bind(tag=TAG).error(f"更新服务器配置失败: {str(e)}")
+             return False
+ 
+-    async def _handle_auth(self, websocket: websockets.ServerConnection):
+-        # 先认证，后建立连接
+-        if self.auth_enable:
+-            headers = dict(websocket.request.headers)
+-            device_id = headers.get("device-id", None)
+-            client_id = headers.get("client-id", None)
+-            if self.allowed_devices and device_id in self.allowed_devices:
+-                # 如果属于白名单内的设备，不校验token，直接放行
+-                return
+-            else:
+-                # 否则校验token
+-                token = headers.get("authorization", "")
+-                if token.startswith("Bearer "):
+-                    token = token[7:]  # 移除'Bearer '前缀
+-                else:
+-                    raise AuthenticationError("Missing or invalid Authorization header")
+-                # 进行认证
+-                auth_success = self.auth.verify_token(
+-                    token, client_id=client_id, username=device_id
+-                )
+-                if not auth_success:
+-                    raise AuthenticationError("Invalid token")
++    async def _handle_auth(self, websocket):
++        if not authorized(self.config, websocket.request.headers):
++            raise AuthenticationError("Invalid robot credential")
+--- a/main/xiaozhi-server/core/connection.py
++++ b/main/xiaozhi-server/core/connection.py
+@@ -215,7 +215,7 @@
+             else:
+                 self.client_ip = ws.remote_address[0]
+             self.logger.bind(tag=TAG).info(
+-                f"{self.client_ip} conn - Headers: {self.headers}"
++                f"{self.client_ip} authenticated connection established"
+             )
+ 
+             self.device_id = self.headers.get("device-id", None)

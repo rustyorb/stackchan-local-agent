@@ -44,6 +44,7 @@ from textUtils import (
     _BASE_SUFFIX,
     build_turn_suffix,
 )
+from bridge.dialogue import bounded_dialogue
 
 # Observability — every metric call is wrapped in `_safe_metric(...)` so a
 # bug in metrics wiring can NEVER break the request path. The metrics
@@ -96,13 +97,13 @@ def _safe_metric(fn, *args, **kwargs) -> None:
 # point at OpenAI cloud, Ollama, LM Studio, vLLM, or any compatible /v1.
 # ---------------------------------------------------------------------------
 LLM_API_URL = os.environ.get(
-    "LLM_API_URL", "https://openrouter.ai/api/v1/chat/completions",
+    "LLM_API_URL", "http://127.0.0.1:1234/v1/chat/completions",
 )
 LLM_API_KEY = os.environ.get(
     "LLM_API_KEY",
     os.environ.get("OPENROUTER_API_KEY", os.environ.get("OPENAI_API_KEY", "")),
 )
-LLM_MODEL = os.environ.get("LLM_MODEL", "anthropic/claude-sonnet-4-6")
+LLM_MODEL = os.environ.get("LLM_MODEL", "local-model")
 LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "512"))
 REQUEST_TIMEOUT_SEC = float(os.environ.get("LLM_TIMEOUT", "60"))
 MAX_SENTENCES = int(os.environ.get("MAX_SENTENCES", "6"))
@@ -775,6 +776,7 @@ def _voice_preparer(channel: str | None, resolution=None,
 
 class MessageIn(BaseModel):
     content: str
+    messages: list[dict[str, str]] | None = None
     channel: str | None = None
     session_id: str | None = None
     metadata: dict | None = None
@@ -930,6 +932,7 @@ def _build_system_prompt() -> str:
 
 async def _llm_prompt(
     text: str,
+    messages: list[dict[str, str]] | None = None,
     chunk_cb: Callable[[str], Awaitable[None]] | None = None,
 ) -> str:
     """Single LLM call path — direct OpenAI-compatible chat completions
@@ -938,16 +941,19 @@ async def _llm_prompt(
 
     loop = asyncio.get_event_loop()
     system = _build_system_prompt()
+    request_messages = bounded_dialogue(messages or [])
+    if not request_messages:
+        request_messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": text},
+        ]
 
     def _stream():
         resp = req.post(
             LLM_API_URL,
             json={
                 "model": LLM_MODEL,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": text},
-                ],
+                "messages": request_messages,
                 "max_tokens": LLM_MAX_TOKENS,
                 "temperature": 0.7,
                 "stream": True,
@@ -2649,7 +2655,7 @@ async def message(payload: MessageIn) -> MessageOut:
     error_msg = None
     try:
         raw = await asyncio.wait_for(
-            _llm_prompt(payload.content),
+            _llm_prompt(payload.content, payload.messages),
             timeout=REQUEST_TIMEOUT_SEC,
         )
         raw = _clean_for_tts(_ensure_emoji_prefix(_content_filter(raw) or raw))
@@ -2942,7 +2948,7 @@ async def message_stream(payload: MessageIn) -> StreamingResponse:
         full = ""
         try:
             full = await asyncio.wait_for(
-                _llm_prompt(payload.content, chunk_cb=on_chunk),
+                _llm_prompt(payload.content, payload.messages, chunk_cb=on_chunk),
                 timeout=REQUEST_TIMEOUT_SEC,
             )
             full = _clean_for_tts(full)
@@ -3023,4 +3029,4 @@ async def message_stream(payload: MessageIn) -> StreamingResponse:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8080")))
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "8080")))

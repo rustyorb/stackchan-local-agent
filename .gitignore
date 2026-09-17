@@ -4,6 +4,10 @@ __pycache__/
 .venv/
 logs/
 .runtime/
+data/host-settings.json
+data/xiaozhi.generated.yaml
+data/.config.yaml
+data/models/
 
 # Local runtime state — ota-shim
 ota-shim/.stackchan-xz.pid
@@ -40,3 +44,9 @@ firmware/sdkconfig.old
 # Personal notes
 LOCAL_NOTES.md
 eim_config.toml
+
+# Pinned factory firmware checkout prepared by build_factory.py
+/firmware/StackChan/
+
+# Local TLS private key and robot credential
+data/security/
