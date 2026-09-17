@@ -144,3 +144,20 @@ def write_server_config(settings: HostSettings, *, lan_host: str, path: Path) ->
     content = yaml.safe_dump(rendered, sort_keys=False)
     write_private_text(path, content)
     write_private_text(path.parent / ".config.yaml", content)
+
+
+def settings_from_form(profile, pause_seconds, idle_mode, idle_minutes, idle_farewell):
+    if idle_mode not in {'never', 'finite'}:
+        raise ValueError('Choose Never or Custom minutes')
+    idle = None
+    if idle_mode == 'finite':
+        try:
+            idle = int(idle_minutes)
+        except (ValueError, TypeError) as exc:
+            raise ValueError('Custom idle time requires minutes from 1 to 1440') from exc
+    try:
+        pause = float(pause_seconds)
+    except (ValueError, TypeError) as exc:
+        raise ValueError('Pause must be a number from 1 to 30 seconds') from exc
+    return HostSettings(active_profile=profile, pause_seconds=pause,
+                        idle_minutes=idle, idle_farewell=idle_farewell == 'on')

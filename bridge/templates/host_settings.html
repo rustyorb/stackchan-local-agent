@@ -1,6 +1,7 @@
-<div id="host-settings" class="card bg-base-100 shadow-sm">
+<div id="host-settings" hx-on::before-swap="if(event.detail.xhr.status===422){event.detail.shouldSwap=true;event.detail.isError=false;}" class="card bg-base-100 shadow-sm">
   <div class="card-body p-3">
     <div class="font-semibold">Conversation settings</div>
+    {% if error %}<div role="alert" class="text-sm text-error">{{ error }}</div>{% endif %}
     <form hx-post="/ui/host-settings" hx-target="#host-settings" hx-swap="outerHTML" class="space-y-2">
       <label class="block text-sm">Model profile
         <select class="select select-bordered w-full" name="profile">

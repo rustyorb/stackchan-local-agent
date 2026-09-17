@@ -44,7 +44,7 @@ from textUtils import (
     _BASE_SUFFIX,
     build_turn_suffix,
 )
-from bridge.dialogue import bounded_dialogue
+from bridge.dialogue import bounded_dialogue, dialogue_for_turn
 
 # Observability — every metric call is wrapped in `_safe_metric(...)` so a
 # bug in metrics wiring can NEVER break the request path. The metrics
@@ -941,12 +941,7 @@ async def _llm_prompt(
 
     loop = asyncio.get_event_loop()
     system = _build_system_prompt()
-    request_messages = bounded_dialogue(messages or [])
-    if not request_messages:
-        request_messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": text},
-        ]
+    request_messages = dialogue_for_turn(messages, text, system)
 
     def _stream():
         resp = req.post(
