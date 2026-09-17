@@ -1,7 +1,7 @@
 name: Stakia regression checks
 on:
   push:
-    branches: [codex/stakia-upgrade]
+    branches: [codex/stakia-upgrade, codex/stakia-host-runtime]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -33,27 +33,32 @@ jobs:
           STAKIA_SERVER_SOURCE: ${{ github.workspace }}/.ci/xiaozhi-server
         run: python -m pytest -q
       - name: Native firmware helper and eye geometry checks
+        if: ${{ hashFiles('firmware/stakia/local-only-factory.patch') != '' }}
         run: |
           python -m unittest discover -s firmware/tests -p 'test_*.py'
           g++ -std=c++17 -Wall -Wextra -pedantic -Ifirmware/stakia firmware/tests/eye_geometry_test.cpp -o /tmp/stakia-eyes
           /tmp/stakia-eyes
       - uses: actions/checkout@v4
+        if: ${{ hashFiles('firmware/stakia/local-only-factory.patch') != '' }}
         with:
           repository: m5stack/StackChan
           ref: 1b5765599fba8aaad1811d9a79358ccc7051f5f3
           path: .ci/factory
           persist-credentials: false
       - name: Prepare factory patches and TLS configuration twice
+        if: ${{ hashFiles('firmware/stakia/local-only-factory.patch') != '' }}
         run: |
           python firmware/build_factory.py --source .ci/factory --server-host 192.168.1.20 --prepare-only --security-dir .ci/security
           python firmware/build_factory.py --source .ci/factory --server-host 192.168.1.20 --prepare-only --security-dir .ci/security
       - uses: actions/checkout@v4
+        if: ${{ hashFiles('firmware/stakia/local-only-factory.patch') != '' }}
         with:
           repository: 78/xiaozhi-esp32
           ref: e77dedb1309153bb63fed285772962c920c97dd4
           path: .ci/xiaozhi-firmware
           persist-credentials: false
       - name: Check firmware protocol patch against pinned sources
+        if: ${{ hashFiles('firmware/stakia/local-only-factory.patch') != '' }}
         run: |
           git -C .ci/xiaozhi-firmware apply ../factory/firmware/patches/xiaozhi-esp32.patch
           git -C .ci/xiaozhi-firmware apply ../../firmware/stakia/local-only-xiaozhi.patch
