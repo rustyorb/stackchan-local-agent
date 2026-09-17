@@ -91,3 +91,18 @@ def test_env_expansion_rejects_unresolved_placeholders(monkeypatch):
     monkeypatch.delenv("MISSING", raising=False)
     with pytest.raises(ValueError, match="MISSING"):
         expand_env({"key": "${MISSING}"})
+
+
+@pytest.mark.parametrize('minutes', [None, '', 'bad', '0', '1441'])
+def test_finite_idle_never_silently_becomes_never(minutes):
+    from bridge.host_settings import settings_from_form
+    with pytest.raises(ValueError):
+        settings_from_form('lmstudio', '6', 'finite', minutes, None)
+
+
+def test_valid_finite_and_never_form_values():
+    from bridge.host_settings import settings_from_form
+    assert settings_from_form('lmstudio', '6', 'finite', '15', 'on').idle_minutes == 15
+    assert settings_from_form('lmstudio', '6', 'never', '', None).idle_minutes is None
+    with pytest.raises(ValueError):
+        settings_from_form('lmstudio', '6', 'invalid-mode', '15', None)

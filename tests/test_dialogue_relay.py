@@ -27,3 +27,13 @@ def test_relay_drops_unknown_roles_and_empty_content():
         {"role": "user", "content": ""},
         {"role": "user", "content": "hello"},
     ]) == [{"role": "user", "content": "hello"}]
+
+
+def test_request_always_contains_current_turn_without_duplicating_it():
+    from bridge.dialogue import dialogue_for_turn
+    system = {'role': 'system', 'content': 'server persona'}
+    current = {'role': 'user', 'content': 'hello'}
+    assert dialogue_for_turn([system], 'hello', 'fallback') == [system, current]
+    assert dialogue_for_turn([system, current], 'hello', 'fallback') == [system, current]
+    assert dialogue_for_turn([], 'hello', 'fallback')[-1] == current
+    assert dialogue_for_turn([{'role': 'assistant', 'content': 'previous'}], 'hello', 'fallback')[-1] == current

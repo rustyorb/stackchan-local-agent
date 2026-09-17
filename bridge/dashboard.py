@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
-from bridge.host_settings import HostSettings, SettingsStore, write_server_config
+from bridge.host_settings import HostSettings, SettingsStore, write_server_config, settings_from_form
 
 log = logging.getLogger("dashboard")
 
@@ -354,19 +354,27 @@ async def host_settings_view(request: Request) -> Any:
 async def host_settings_save(
     request: Request,
     profile: str = Form(...),
-    pause_seconds: float = Form(...),
+    pause_seconds: str = Form(...),
     idle_mode: str = Form(...),
-    idle_minutes: int | None = Form(None),
+    idle_minutes: str | None = Form(None),
     idle_farewell: str | None = Form(None),
 ) -> Any:
-    idle = None if idle_mode == "never" else idle_minutes
-    settings = HostSettings(
-        active_profile=profile, pause_seconds=pause_seconds,
-        idle_minutes=idle, idle_farewell=idle_farewell == "on",
-    )
-    lan_host = os.environ.get("STAKIA_LAN_HOST", "")
-    write_server_config(settings, lan_host=lan_host, path=SERVER_CONFIG_PATH)
-    HOST_SETTINGS.save(settings)
+    try:
+        settings = settings_from_form(profile, pause_seconds, idle_mode, idle_minutes, idle_farewell)
+        lan_host = os.environ.get("STAKIA_LAN_HOST", "")
+        write_server_config(settings, lan_host=lan_host, path=SERVER_CONFIG_PATH)
+        HOST_SETTINGS.save(settings)
+    except ValueError as exc:
+        try:
+            previous = HOST_SETTINGS.load()
+        except (ValueError, OSError):
+            previous = HostSettings()
+        return templates.TemplateResponse(
+            request, "host_settings.html", {"settings": previous, "saved": False, "error": str(exc)},
+            status_code=422,
+        )
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail="Could not save the local configuration; check file access") from exc
     return templates.TemplateResponse(
         request, "host_settings.html", {"settings": settings, "saved": True}
     )
