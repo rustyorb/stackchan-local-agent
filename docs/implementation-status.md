@@ -34,7 +34,7 @@ Firmware revisions are pinned. Some upstream dependency references are tags rath
 
 Use [the host setup](../README.md) and [the firmware build guide](../firmware/STAKIA-BUILD.md).
 
-Still needed from the PC: private LAN IPv4 address and robot port identification. The latest screenshot shows ESP-IDF 6.1 and COM15 as USB Serial Device. Use ESP-IDF 5.5.4 for the pinned firmware and identify Stakia by a port unplug/replug check. The native build targets the commercial M5Stack StackChan K151/K151-R; verify the robot's controller matches before flashing.
+Still needed from the PC: private LAN IPv4 address and robot port identification. The latest screenshot confirms ESP-IDF 5.5.4 is active and lists COM15 as USB Serial Device. Identify Stakia by a port unplug/replug check. The native build targets the commercial M5Stack StackChan K151/K151-R; verify the robot's controller matches before flashing.
 
 Mars already has a maintained stock restore option and explicitly requested no stock rebuild or backup work. None is required by these scripts. The reported 32 GB removable card has not been inspected; the new renderer does not require it.
 
