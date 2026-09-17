@@ -25,8 +25,8 @@ def test_settings_persist_profile_and_independent_farewell(tmp_path):
 def test_render_selects_profile_and_expands_secret_without_writing_placeholder(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "secret-value")
     settings = HostSettings(active_profile="openrouter")
-    rendered = render_server_config(settings, lan_host="192.168.1.20")
-    assert rendered["server"]["websocket"] == "ws://192.168.1.20:8000/xiaozhi/v1/"
+    rendered = render_server_config(settings, device_token="a" * 64, lan_host="192.168.1.20")
+    assert rendered["server"]["websocket"] == "wss://192.168.1.20:8000/xiaozhi/v1/"
     assert rendered["VAD"]["SileroVAD"]["min_silence_duration_ms"] == 6000
     assert rendered["close_connection_no_voice_time"] is None
     assert rendered["end_prompt"]["enable"] is False
@@ -36,7 +36,7 @@ def test_render_selects_profile_and_expands_secret_without_writing_placeholder(m
         "VAD": "SileroVAD", "ASR": "WhisperLocal", "LLM": "OpenRouter",
         "VLLM": "none", "TTS": "PiperLocal", "Memory": "nomem", "Intent": "nointent",
     }
-    assert rendered["server"]["auth"]["enabled"] is False
+    assert rendered["server"]["auth"]["enabled"] is True
     assert rendered["manager-api"]["url"] == ""
     assert rendered["standalone_config"] is True
     assert rendered["xiaozhi"]["audio_params"]["sample_rate"] == 24000
@@ -50,7 +50,7 @@ def test_render_selects_profile_and_expands_secret_without_writing_placeholder(m
 def test_prompt_is_loaded_from_local_persona(tmp_path):
     persona = tmp_path / "stakia.md"
     persona.write_text("You are Stakia, locally hosted.", encoding="utf-8")
-    rendered = render_server_config(HostSettings(), lan_host="10.0.0.5", persona_path=persona)
+    rendered = render_server_config(HostSettings(), device_token="a" * 64, lan_host="10.0.0.5", persona_path=persona)
     assert rendered["prompt"] == "You are Stakia, locally hosted."
 
 
@@ -84,7 +84,7 @@ def test_local_assets_reject_missing_whisper_tokenizer(tmp_path):
 def test_missing_required_secret_is_rejected(monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
-        render_server_config(HostSettings(active_profile="openrouter"), lan_host="10.0.0.5")
+        render_server_config(HostSettings(active_profile="openrouter"), device_token="a" * 64, lan_host="10.0.0.5")
 
 
 def test_env_expansion_rejects_unresolved_placeholders(monkeypatch):

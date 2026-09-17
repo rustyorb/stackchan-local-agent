@@ -7,6 +7,10 @@ RUN git -C /src apply --check /tmp/never-idle.patch \
  && git -C /src apply /tmp/never-idle.patch \
  && test "$(git -C /src rev-parse HEAD)" = "$XIAOZHI_SERVER_COMMIT"
 
+COPY custom-providers/xiaozhi-patches/secure-transport.patch /tmp/secure-transport.patch
+RUN git -C /src apply --check /tmp/secure-transport.patch \
+ && git -C /src apply /tmp/secure-transport.patch
+
 FROM python:3.11.10-slim-bookworm
 ARG XIAOZHI_SERVER_COMMIT=6afc54a17def47578a4b3efc4680873689d3168b
 LABEL org.opencontainers.image.revision=$XIAOZHI_SERVER_COMMIT

@@ -29,7 +29,7 @@ def test_main_initializes_auth_before_websocket_and_http_handlers():
             text=True,
         )
 
-    config = render_server_config(HostSettings(), lan_host='192.168.1.20')
+    config = render_server_config(HostSettings(), device_token="a" * 64, lan_host='192.168.1.20')
     assert 'auth_key' not in config['server']
     logger = Mock()
     logger.bind.return_value = logger
@@ -81,4 +81,4 @@ def test_main_initializes_auth_before_websocket_and_http_handlers():
     assert created['WebSocketServer'].auth.secret_key == key
     assert created['OTAHandler'].auth.secret_key == key
     assert created['SimpleHttpServer'].ota_handler is created['OTAHandler']
-    assert created['WebSocketServer'].auth_enable is False
+    assert created['WebSocketServer'].auth_enable is True

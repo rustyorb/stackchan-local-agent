@@ -12,7 +12,7 @@ This continues the existing `rustyorb/stackchan-local-agent` project from `7f63c
 | Local speech | Local faster-whisper, Silero VAD, and Piper assets; startup fails clearly when required assets are missing. |
 | Retain earlier work | Existing bridge, persona, dashboard, and provider structure retained; structured conversation history survives the optional bridge relay. |
 | Expressive eyes | Larger emerald irises, pupils, highlights, gaze, independent lids, six emotion mappings, and a smaller mouth. |
-| Independent robot connection | Private LAN WebSocket compiled into firmware; vendor activation/bootstrap and saved vendor endpoints bypassed. |
+| Independent robot connection | Authenticated private LAN TLS WebSocket compiled into firmware; vendor activation/bootstrap and saved vendor endpoints bypassed. |
 | Independent runtime | Vendor account/apps, public NTP, camera uploads, network updates, and asset downloads disabled in the active firmware paths. |
 | Use existing ESP-IDF | Native build helper for the pinned commercial StackChan source and ESP-IDF 5.5.4; no automatic flashing. |
 
@@ -20,7 +20,7 @@ Settings are saved immediately and take effect when the voice server is recreate
 
 ## Verification and limits
 
-- Host suite: 24 tests and 5 subtests passed with the pinned upstream fixture available. Firmware helper unittest and compiled C++ eye geometry check also passed. No paid model calls were made.
+- Host and TLS regressions passed with the pinned upstream fixture available. Firmware helper unittest and compiled C++ eye geometry check also passed. No paid model calls were made.
 - The idle integration fixture applies the actual patch to pinned upstream source and executes its close logic with a simulated clock. Never survives one simulated hour; finite timeout and farewell remain independently effective.
 - Firmware patches apply cleanly to the pinned sources. Repeated preparation is idempotent. Eye geometry and endpoint-validation checks pass.
 - Source review caught and fixed a Wi-Fi setup initialization ordering error. Wi-Fi setup now starts after the application and Wi-Fi manager are initialized.
@@ -34,8 +34,8 @@ Firmware revisions are pinned. Some upstream dependency references are tags rath
 
 Use [the host setup](../README.md) and [the firmware build guide](../firmware/STAKIA-BUILD.md).
 
-Still needed from the PC: ESP-IDF version, private LAN IPv4 address, and verified serial port. COM15 is Mars's current guess. The supplied screenshot was unavailable for inspection. The native build targets the commercial M5Stack StackChan K151/K151-R; verify the robot's controller matches before flashing.
+Still needed from the PC: private LAN IPv4 address and robot port identification. The latest screenshot shows ESP-IDF 6.1 and COM15 as USB Serial Device. Use ESP-IDF 5.5.4 for the pinned firmware and identify Stakia by a port unplug/replug check. The native build targets the commercial M5Stack StackChan K151/K151-R; verify the robot's controller matches before flashing.
 
 Mars already has a maintained stock restore option and explicitly requested no stock rebuild or backup work. None is required by these scripts. The reported 32 GB removable card has not been inspected; the new renderer does not require it.
 
-Changing the compiled host address currently requires rebuilding the firmware, so reserve the PC's LAN address in the router. The first integration uses an unauthenticated private LAN service; it is not an internet-facing deployment.
+Changing the compiled host address currently requires rebuilding the firmware, so reserve the PC's LAN address in the router. The service now requires a private certificate and robot credential. The HTTP listener is disabled and the dashboard binds to localhost. It remains a LAN deployment.

@@ -47,3 +47,6 @@ eim_config.toml
 
 # Pinned factory firmware checkout prepared by build_factory.py
 /firmware/StackChan/
+
+# Local TLS private key and robot credential
+data/security/

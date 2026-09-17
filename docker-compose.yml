@@ -1,8 +1,5 @@
 services:
-  # Upstream xiaozhi-esp32-server. Use the published image directly for
-  # first boot — switch to `build: { context: . }` later if you want to
-  # bake in Piper / faster-whisper / fluidsynth (see dotty's Dockerfile
-  # for the recipe).
+  # Pinned local voice service with native TLS and robot authentication.
   xiaozhi-esp32-server:
     build:
       context: .
@@ -29,12 +26,13 @@ services:
       # but explicit is safer if/when we move to Linux).
       - "host.docker.internal:host-gateway"
     ports:
-      - "8000:8000"   # WebSocket (StackChan firmware connects here)
-      - "8003:8003"   # OTA + admin HTTP
+      - "${STAKIA_LAN_HOST:?Set STAKIA_LAN_HOST}:8000:8000"   # WebSocket (StackChan firmware connects here)
     volumes:
       # Live config — edit on host, restart container to pick up.
       - ./data:/opt/xiaozhi-esp32-server/data
       - ./data/models:/models:ro
+      - ./data/security:/run/stakia:ro
+      - ./custom-providers/stakia_transport.py:/opt/xiaozhi-esp32-server/core/utils/stakia_transport.py:ro
       # Custom LLM provider — relays voice turns to the bridge.
       - ./custom-providers/openai_compat:/opt/xiaozhi-esp32-server/core/providers/llm/openai_compat:ro
       - ./custom-providers/zeroclaw:/opt/xiaozhi-esp32-server/core/providers/llm/zeroclaw:ro
@@ -48,7 +46,5 @@ services:
       # Personas — read by the openai_compat / zeroclaw providers at request
       # time so persona swap is zero-restart.
       - ./personas:/opt/xiaozhi-esp32-server/personas:ro
-      # OTA artifacts — drop firmware .bin files here; device polls + flashes.
-      - ./data/bin:/opt/xiaozhi-esp32-server/data/bin
       # Working dir for ASR/TTS scratch files.
       - ./tmp:/opt/xiaozhi-esp32-server/tmp

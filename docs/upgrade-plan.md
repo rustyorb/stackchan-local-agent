@@ -1,3 +1,7 @@
+# September 17 security correction
+
+The implementation now uses authenticated TLS, a locally generated CA, a private robot credential, and a localhost-only dashboard. Earlier plaintext/unauthenticated proposals below are historical and superseded. See README.md and firmware/STAKIA-BUILD.md for current setup.
+
 # Stakia: StackChan Upgrade Research & Build Plan
 
 **Prepared for Mars · Research date: 2026-09-15 · Revised: 2026-09-16 · Version 1.2**

@@ -545,3 +545,16 @@ index 3f11ed6..fc38e0e 100644
          GetMooncake().installApp(std::make_unique<AppDance>());
          GetMooncake().installApp(std::make_unique<AppSetup>());
  
+diff --git a/firmware/main/idf_component.yml b/firmware/main/idf_component.yml
+index f124751..4c0f541 100644
+--- a/firmware/main/idf_component.yml
++++ b/firmware/main/idf_component.yml
+@@ -23,7 +23,7 @@ dependencies:
+   78/esp-wifi-connect: ~3.1.1
+   espressif/esp_audio_effects: ~1.2.1
+   espressif/esp_audio_codec: ~2.4.1
+-  78/esp-ml307: ~3.6.4
++  78/esp-ml307: ==3.6.4
+   78/uart-eth-modem:
+     version: ~0.3.3
+     rules:

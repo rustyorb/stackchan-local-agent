@@ -613,18 +613,20 @@ index bcc0dc5..57699f3 100644
 +    return ESP_ERR_NOT_SUPPORTED;
  }
 diff --git a/main/protocols/websocket_protocol.cc b/main/protocols/websocket_protocol.cc
-index f0cc034..8278bdf 100644
+index f0cc034..02695a1 100644
 --- a/main/protocols/websocket_protocol.cc
 +++ b/main/protocols/websocket_protocol.cc
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,9 @@
  #include "system_info.h"
  #include "application.h"
  #include "settings.h"
 +#include "stakia_endpoint.h"
++#include <sys/time.h>
++#include <ctime>
  
  #include <cstring>
  #include <cJSON.h>
-@@ -81,13 +82,9 @@ void WebsocketProtocol::CloseAudioChannel(bool send_goodbye) {
+@@ -81,13 +84,15 @@ void WebsocketProtocol::CloseAudioChannel(bool send_goodbye) {
  }
  
  bool WebsocketProtocol::OpenAudioChannel() {
@@ -634,9 +636,14 @@ index f0cc034..8278bdf 100644
 -    int version = settings.GetInt("version");
 -    if (version != 0) {
 -        version_ = version;
--    }
 +    const std::string url = STAKIA_WEBSOCKET_URL;
-+    const std::string token; // Local server auth is disabled on the private LAN.
++    std::string token = STAKIA_DEVICE_TOKEN;
++    // A lost RTC must not leave TLS checking against 1970; never disable verification.
++    if (time(nullptr) < STAKIA_BUILD_UNIX_TIME) {
++        struct timeval now = {};
++        now.tv_sec = STAKIA_BUILD_UNIX_TIME;
++        settimeofday(&now, nullptr);
+     }
 +    version_ = 1; // Raw Opus frames, supported by the local Xiaozhi server.
  
      error_occurred_ = false;

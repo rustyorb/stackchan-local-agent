@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import yaml
+from bridge.security import ensure_security, private_ipv4, write_private_text
 
 
 @dataclass(frozen=True)
@@ -74,9 +75,10 @@ def validate_local_assets(model_root: Path) -> None:
 
 
 def render_server_config(settings: HostSettings, *, lan_host: str,
-                         persona_path: Path | None = None) -> dict:
-    if not lan_host or lan_host in {"127.0.0.1", "localhost", "0.0.0.0"}:
-        raise ValueError("lan_host must be an address reachable by StackChan")
+                         persona_path: Path | None = None, device_token: str = "") -> dict:
+    lan_host = private_ipv4(lan_host)
+    if len(device_token) != 64 or any(c not in "0123456789abcdef" for c in device_token):
+        raise ValueError("Provision the local device credential before rendering configuration")
     profiles = {
         "lmstudio": {"type": "openai", "base_url": os.getenv("LMSTUDIO_BASE_URL", "http://host.docker.internal:1234/v1"),
                      "model_name": os.getenv("LMSTUDIO_MODEL", "local-model"), "api_key": os.getenv("LMSTUDIO_API_KEY", "lm-studio")},
@@ -92,9 +94,11 @@ def render_server_config(settings: HostSettings, *, lan_host: str,
         raise ValueError(f"local persona is unavailable: {persona_path}") from exc
     return expand_env({
         "standalone_config": True,
-        "server": {"ip": "0.0.0.0", "port": 8000, "http_port": 8003,
-                   "websocket": f"ws://{lan_host}:8000/xiaozhi/v1/",
-                   "auth": {"enabled": False, "allowed_devices": []},
+        "server": {"ip": "0.0.0.0", "port": 8000, "http_port": 0,
+                   "websocket": f"wss://{lan_host}:8000/xiaozhi/v1/",
+                   "auth": {"enabled": True, "token": device_token, "allowed_devices": []},
+                   "tls": {"certfile": "/run/stakia/server-cert.pem",
+                           "keyfile": "/run/stakia/server-key.pem"},
                    "mqtt_gateway": None, "udp_gateway": None},
         "manager-api": {"url": "", "secret": ""},
         "prompt_template": "/opt/xiaozhi-esp32-server/stakia-local-prompt.txt",
@@ -134,12 +138,9 @@ def render_server_config(settings: HostSettings, *, lan_host: str,
 
 
 def write_server_config(settings: HostSettings, *, lan_host: str, path: Path) -> None:
-    rendered = render_server_config(settings, lan_host=lan_host)
+    identity = ensure_security(path.parent / "security", lan_host)
+    rendered = render_server_config(settings, lan_host=lan_host, device_token=identity["device_token"])
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(yaml.safe_dump(rendered, sort_keys=False), encoding="utf-8")
-    tmp.replace(path)
-    runtime = path.parent / ".config.yaml"
-    runtime_tmp = runtime.with_suffix(".yaml.tmp")
-    runtime_tmp.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
-    runtime_tmp.replace(runtime)
+    content = yaml.safe_dump(rendered, sort_keys=False)
+    write_private_text(path, content)
+    write_private_text(path.parent / ".config.yaml", content)

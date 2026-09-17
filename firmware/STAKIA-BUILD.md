@@ -13,11 +13,12 @@ idf.py --version
 Get-CimInstance Win32_SerialPort | Select-Object DeviceID, Name
 ```
 
-The pinned factory source requires ESP-IDF **5.5.4**. Confirm the USB port; COM15 is a current guess, not a verified value. If no serial port appears, inspect Device Manager and check the USB data cable.
+The pinned factory source requires ESP-IDF **5.5.4**. Mars’s screenshot shows **6.1** installed; install 5.5.4 alongside it and open the 5.5.4 terminal for this build. Confirm the USB port; The screenshot lists **COM15 as USB Serial Device**. Confirm this is Stakia by unplugging/reconnecting her and checking which port disappears/returns. If no serial port appears, inspect Device Manager and check the USB data cable.
 
 From the root of this project:
 
 ```powershell
+python -m pip install "cryptography>=46,<47"
 python firmware/build_factory.py --eyes stakia --server-host YOUR_PC_LAN_IP
 ```
 
@@ -25,7 +26,11 @@ This clones factory commit `1b5765599fba8aaad1811d9a79358ccc7051f5f3`, applies t
 
 Replace `YOUR_PC_LAN_IP` with your computer's private IPv4 address, for example `192.168.1.20`. Keep that address stable with a router DHCP reservation.
 
-This build connects directly to `ws://YOUR_PC_LAN_IP:8000/xiaozhi/v1/`. It bypasses vendor OTA/bootstrap and activation entirely. Old saved vendor URLs and tokens are ignored. There is no vendor fallback if the local server is unavailable. Model selection happens on your host; OpenRouter is used only when you select it.
+This build connects directly to `wss://YOUR_PC_LAN_IP:8000/xiaozhi/v1/`. It bypasses vendor OTA/bootstrap and activation entirely. Old saved vendor URLs and tokens are ignored. There is no vendor fallback if the local server is unavailable. Model selection happens on your host; OpenRouter is used only when you select it.
+
+The helper generates or reuses `data/security/`, embeds the public local CA and robot credential, and forces certificate verification in the isolated sdkconfig. It does not embed the server private key. Use the same security directory for the PC host and firmware build. Credentials and generated firmware must remain private. Certificates expire after 825 days; regeneration requires rebuilding/reflashing the paired robot.
+
+The firmware uses the hardware RTC for TLS date validation, with its build time as a lower bound if the RTC was reset. Keep the hardware clock correct; this lower bound is not a replacement for a maintained RTC. No public time service is contacted. The ESP network component is pinned to 3.6.4, whose TLS implementation attaches the configured CA bundle.
 
 The launcher retains AI, local ESP-NOW control, BLE dance, and local hardware settings. Vendor account, community/app-center, and EzData functions are unavailable. Wi-Fi setup uses the device's local configuration access point. Public NTP, camera uploads, network firmware upgrades, and asset downloads are disabled. Time comes from the hardware RTC until local time synchronization is added.
 

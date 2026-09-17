@@ -28,7 +28,7 @@ try {
         $bridge = Invoke-WebRequest -Uri "http://localhost:8080/ui" -UseBasicParsing -TimeoutSec 3
         Write-Host "  bridge UI HTTP=$($bridge.StatusCode)"
     } catch { Write-Host "  bridge UI unreachable" }
-    foreach ($port in @(8000, 8003)) {
+    foreach ($port in @(8000)) {
         $ok = Test-NetConnection -ComputerName $lan -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue
         Write-Host "  ${lan}:$port reachable=$ok"
     }
