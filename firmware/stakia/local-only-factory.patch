@@ -1,0 +1,560 @@
+diff --git a/firmware/main/apps/app_dance/app_dance.cpp b/firmware/main/apps/app_dance/app_dance.cpp
+index ebd3d4c..3d4a7a0 100644
+--- a/firmware/main/apps/app_dance/app_dance.cpp
++++ b/firmware/main/apps/app_dance/app_dance.cpp
+@@ -137,7 +137,7 @@ void AppDance::onClose()
+         view::destroy_status_bar();
+     }
+ 
+-    GetHAL().requestWarmReboot(5);
++    GetHAL().requestWarmReboot(2);
+ }
+ 
+ void AppDance::check_auto_angle_sync_mode()
+diff --git a/firmware/main/apps/app_espnow_ctrl/app_espnow_ctrl.cpp b/firmware/main/apps/app_espnow_ctrl/app_espnow_ctrl.cpp
+index f85ce60..d32f590 100644
+--- a/firmware/main/apps/app_espnow_ctrl/app_espnow_ctrl.cpp
++++ b/firmware/main/apps/app_espnow_ctrl/app_espnow_ctrl.cpp
+@@ -256,5 +256,5 @@ void AppEspnowControl::onClose()
+     view::destroy_home_indicator();
+     view::destroy_status_bar();
+ 
+-    GetHAL().requestWarmReboot(2);
++    GetHAL().requestWarmReboot(1);
+ }
+diff --git a/firmware/main/apps/app_launcher/app_launcher.cpp b/firmware/main/apps/app_launcher/app_launcher.cpp
+index e1e3d20..38265a0 100644
+--- a/firmware/main/apps/app_launcher/app_launcher.cpp
++++ b/firmware/main/apps/app_launcher/app_launcher.cpp
+@@ -22,16 +22,9 @@ void AppLauncher::onLauncherCreate()
+ 
+ void AppLauncher::onLauncherOpen()
+ {
+-    mclog::tagInfo(getAppInfo().name, "on open");
+-
+     LvglLockGuard lock;
+-
+-    if (!_startup_checked && !GetHAL().isAppConfiged()) {
+-        mclog::tagInfo(getAppInfo().name, "app not configured, start startup worker");
+-        _startup_worker = std::make_unique<setup_workers::StartupWorker>();
+-    } else {
+-        create_launcher_view();
+-    }
++    // Local setup needs no app download, account, pairing, or activation.
++    create_launcher_view();
+ }
+ 
+ void AppLauncher::onLauncherRunning()
+diff --git a/firmware/main/apps/app_setup/app_setup.cpp b/firmware/main/apps/app_setup/app_setup.cpp
+index eb14452..6ac755c 100644
+--- a/firmware/main/apps/app_setup/app_setup.cpp
++++ b/firmware/main/apps/app_setup/app_setup.cpp
+@@ -5,6 +5,7 @@
+  */
+ #include "app_setup.h"
+ #include <hal/hal.h>
++#include <settings.h>
+ #include <mooncake.h>
+ #include <mooncake_log.h>
+ #include <assets/assets.h>
+@@ -49,7 +50,11 @@ void AppSetup::onOpen()
+               [&]() {
+                   _destroy_menu    = true;
+                   _need_warm_reset = true;
+-                  _worker          = std::make_unique<WifiSetupWorker>();
++                  Settings local("stakia", true);
++                  local.SetInt("wifi_setup", 1);
++                  _destroy_menu = false;
++                  _need_warm_reset = false;
++                  GetHAL().requestXiaozhiStart();
+               }}},
+         },
+         {
+@@ -103,15 +108,6 @@ void AppSetup::onOpen()
+                   _worker       = std::make_unique<RgbTestWorker>();
+               }}},
+         },
+-        {
+-            "Account",
+-            {{"Unbind & Reset",
+-              [&]() {
+-                  _destroy_menu    = true;
+-                  _need_warm_reset = true;
+-                  _worker          = std::make_unique<AccountWorker>();
+-              }}},
+-        },
+         {
+             "Firmware",
+             {
+@@ -124,12 +120,6 @@ void AppSetup::onOpen()
+                          _worker       = std::make_unique<FwVersionWorker>();
+                      }
+                  }},
+-                {"Check for Updates",
+-                 [&]() {
+-                     _destroy_menu    = true;
+-                     _need_warm_reset = true;
+-                     _worker          = std::make_unique<SystemUpdateWorker>();
+-                 }},
+                 //  {"Factory Reset",
+                 //   [&]() {
+                 //       _destroy_menu = true;
+@@ -188,6 +178,6 @@ void AppSetup::onClose()
+     view::destroy_status_bar();
+ 
+     if (_need_warm_reset) {
+-        GetHAL().requestWarmReboot(6);
++        GetHAL().requestWarmReboot(3);
+     }
+ }
+diff --git a/firmware/main/hal/board/stackchan_camera.cc b/firmware/main/hal/board/stackchan_camera.cc
+index 5ae1912..0b6e2f2 100644
+--- a/firmware/main/hal/board/stackchan_camera.cc
++++ b/firmware/main/hal/board/stackchan_camera.cc
+@@ -1026,144 +1026,5 @@ bool StackChanCamera::SetVFlip(bool enabled)
+  */
+ std::string StackChanCamera::Explain(const std::string& question)
+ {
+-    if (explain_url_.empty()) {
+-        throw std::runtime_error("Image explain URL or token is not set");
+-    }
+-
+-    // 创建局部的 JPEG 队列, 40 entries is about to store 512 * 40 = 20480 bytes of JPEG data
+-    QueueHandle_t jpeg_queue = xQueueCreate(40, sizeof(JpegChunk));
+-    if (jpeg_queue == nullptr) {
+-        ESP_LOGE(TAG, "Failed to create JPEG queue");
+-        throw std::runtime_error("Failed to create JPEG queue");
+-    }
+-
+-    // We spawn a thread to encode the image to JPEG using optimized encoder (cost about 500ms and 8KB SRAM)
+-    encoder_thread_ = std::thread([this, jpeg_queue]() {
+-        uint16_t w             = frame_.width ? frame_.width : 320;
+-        uint16_t h             = frame_.height ? frame_.height : 240;
+-        v4l2_pix_fmt_t enc_fmt = frame_.format;
+-        bool ok                = image_to_jpeg_cb(
+-                           frame_.data, frame_.len, w, h, enc_fmt, 80,
+-                           [](void* arg, size_t index, const void* data, size_t len) -> size_t {
+-                auto jpeg_queue = static_cast<QueueHandle_t>(arg);
+-                JpegChunk chunk = {.data = nullptr, .len = len};
+-                if (index == 0 && data != nullptr && len > 0) {
+-                    chunk.data = (uint8_t*)heap_caps_aligned_alloc(16, len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+-                    if (chunk.data == nullptr) {
+-                        ESP_LOGE(TAG, "Failed to allocate %zu bytes for JPEG chunk", len);
+-                        chunk.len = 0;
+-                    } else {
+-                        memcpy(chunk.data, data, len);
+-                    }
+-                } else {
+-                    chunk.len = 0;  // Sentinel or error
+-                }
+-                xQueueSend(jpeg_queue, &chunk, portMAX_DELAY);
+-                return len;
+-                           },
+-                           jpeg_queue);
+-
+-        if (!ok) {
+-            JpegChunk chunk = {.data = nullptr, .len = 0};
+-            xQueueSend(jpeg_queue, &chunk, portMAX_DELAY);
+-        }
+-    });
+-
+-    auto network = Board::GetInstance().GetNetwork();
+-    auto http    = network->CreateHttp(3);
+-    // 构造multipart/form-data请求体
+-    std::string boundary = "----ESP32_CAMERA_BOUNDARY";
+-
+-    // 配置HTTP客户端，使用分块传输编码
+-    http->SetHeader("Device-Id", SystemInfo::GetMacAddress().c_str());
+-    http->SetHeader("Client-Id", Board::GetInstance().GetUuid().c_str());
+-    if (!explain_token_.empty()) {
+-        http->SetHeader("Authorization", "Bearer " + explain_token_);
+-    }
+-    http->SetHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+-    http->SetHeader("Transfer-Encoding", "chunked");
+-    if (!http->Open("POST", explain_url_)) {
+-        ESP_LOGE(TAG, "Failed to connect to explain URL");
+-        // Clear the queue
+-        encoder_thread_.join();
+-        JpegChunk chunk;
+-        while (xQueueReceive(jpeg_queue, &chunk, portMAX_DELAY) == pdPASS) {
+-            if (chunk.data != nullptr) {
+-                heap_caps_free(chunk.data);
+-            } else {
+-                break;
+-            }
+-        }
+-        vQueueDelete(jpeg_queue);
+-        throw std::runtime_error("Failed to connect to explain URL");
+-    }
+-
+-    {
+-        // 第一块：question字段
+-        std::string question_field;
+-        question_field += "--" + boundary + "\r\n";
+-        question_field += "Content-Disposition: form-data; name=\"question\"\r\n";
+-        question_field += "\r\n";
+-        question_field += question + "\r\n";
+-        http->Write(question_field.c_str(), question_field.size());
+-    }
+-    {
+-        // 第二块：文件字段头部
+-        std::string file_header;
+-        file_header += "--" + boundary + "\r\n";
+-        file_header += "Content-Disposition: form-data; name=\"file\"; filename=\"camera.jpg\"\r\n";
+-        file_header += "Content-Type: image/jpeg\r\n";
+-        file_header += "\r\n";
+-        http->Write(file_header.c_str(), file_header.size());
+-    }
+-
+-    // 第三块：JPEG数据
+-    size_t total_sent   = 0;
+-    bool saw_terminator = false;
+-    while (true) {
+-        JpegChunk chunk;
+-        if (xQueueReceive(jpeg_queue, &chunk, portMAX_DELAY) != pdPASS) {
+-            ESP_LOGE(TAG, "Failed to receive JPEG chunk");
+-            break;
+-        }
+-        if (chunk.data == nullptr) {
+-            saw_terminator = true;
+-            break;  // The last chunk
+-        }
+-        http->Write((const char*)chunk.data, chunk.len);
+-        total_sent += chunk.len;
+-        heap_caps_free(chunk.data);
+-    }
+-    // Wait for the encoder thread to finish
+-    encoder_thread_.join();
+-    // 清理队列
+-    vQueueDelete(jpeg_queue);
+-
+-    if (!saw_terminator || total_sent == 0) {
+-        ESP_LOGE(TAG, "JPEG encoder failed or produced empty output");
+-        throw std::runtime_error("Failed to encode image to JPEG");
+-    }
+-
+-    {
+-        // 第四块：multipart尾部
+-        std::string multipart_footer;
+-        multipart_footer += "\r\n--" + boundary + "--\r\n";
+-        http->Write(multipart_footer.c_str(), multipart_footer.size());
+-    }
+-    // 结束块
+-    http->Write("", 0);
+-
+-    if (http->GetStatusCode() != 200) {
+-        ESP_LOGE(TAG, "Failed to upload photo, status code: %d", http->GetStatusCode());
+-        throw std::runtime_error("Failed to upload photo");
+-    }
+-
+-    std::string result = http->ReadAll();
+-    http->Close();
+-
+-    // Get remain task stack size
+-    size_t remain_stack_size = uxTaskGetStackHighWaterMark(nullptr);
+-    ESP_LOGI(TAG, "Explain image size=%d bytes, compressed size=%d, remain stack size=%d, question=%s\n%s",
+-             (int)frame_.len, (int)total_sent, (int)remain_stack_size, question.c_str(), result.c_str());
+-    return result;
++    throw std::runtime_error("Camera uploads are disabled until a local vision service is configured");
+ }
+diff --git a/firmware/main/hal/hal_account.cpp b/firmware/main/hal/hal_account.cpp
+index b953d27..b9bbc25 100644
+--- a/firmware/main/hal/hal_account.cpp
++++ b/firmware/main/hal/hal_account.cpp
+@@ -17,22 +17,22 @@ static const std::string_view _setting_ns              = "account";
+ static const std::string_view _setting_username_key    = "username";
+ static const std::string_view _setting_device_name_key = "device_name";
+ 
+-static std::string get_user_account_info_url()
++[[maybe_unused]] static std::string get_user_account_info_url()
+ {
+     return secret_logic::get_server_url() + "/stackChan/device/user";
+ }
+ 
+-static std::string get_device_info_url()
++[[maybe_unused]] static std::string get_device_info_url()
+ {
+     return secret_logic::get_server_url() + "/stackChan/device/info";
+ }
+ 
+-static std::string get_unbind_user_account_info_url()
++[[maybe_unused]] static std::string get_unbind_user_account_info_url()
+ {
+     return secret_logic::get_server_url() + "/stackChan/device/unbind";
+ }
+ 
+-static bool request_authorized_get(std::string_view token, std::string_view url, std::string &response,
++[[maybe_unused]] static bool request_authorized_get(std::string_view token, std::string_view url, std::string &response,
+                                    std::function<void(std::string_view)> onLog)
+ {
+     auto &board  = Board::GetInstance();
+@@ -64,7 +64,7 @@ static bool request_authorized_get(std::string_view token, std::string_view url,
+     return true;
+ }
+ 
+-static bool fetch_username(std::string_view token, std::string &username, std::function<void(std::string_view)> onLog)
++[[maybe_unused]] static bool fetch_username(std::string_view token, std::string &username, std::function<void(std::string_view)> onLog)
+ {
+     onLog("Updating user account info...");
+ 
+@@ -107,7 +107,7 @@ static bool fetch_username(std::string_view token, std::string &username, std::f
+     return success;
+ }
+ 
+-static bool fetch_device_name(std::string_view token, std::string &deviceName,
++[[maybe_unused]] static bool fetch_device_name(std::string_view token, std::string &deviceName,
+                               std::function<void(std::string_view)> onLog)
+ {
+     onLog("Updating device info...");
+@@ -166,94 +166,12 @@ UserAccountInfo_t Hal::getUserAccountInfo()
+ 
+ bool Hal::updateAccountInfo(std::function<void(std::string_view)> onLog)
+ {
+-    std::string token = secret_logic::generate_auth_token();
+-
+-    std::string username;
+-    if (!fetch_username(token, username, onLog)) {
+-        return false;
+-    }
+-
+-    std::string device_name;
+-    if (!fetch_device_name(token, device_name, onLog)) {
+-        return false;
+-    }
+-
+-    Settings settings(_setting_ns.data(), true);
+-    settings.SetString(_setting_username_key.data(), username);
+-    settings.SetString(_setting_device_name_key.data(), device_name);
+-
+-    mclog::tagInfo(_tag, "account updated: username={}, device_name={}", username, device_name);
+-    onLog(std::string("Account updated: ") + username);
+-    return true;
++    onLog("Vendor accounts are disabled in Stakia");
++    return false;
+ }
+ 
+ bool Hal::unbindAccount(std::function<void(std::string_view)> onLog)
+ {
+-    std::string token = secret_logic::generate_auth_token();
+-
+-    auto &board  = Board::GetInstance();
+-    auto network = board.GetNetwork();
+-    auto http    = network->CreateHttp(0);
+-
+-    if (!http) {
+-        mclog::tagError(_tag, "failed to create http client");
+-        onLog("Failed to create HTTP client");
+-        return false;
+-    }
+-
+-    http->SetHeader("Authorization", token);
+-    http->SetContent(std::string());
+-    mclog::tagInfo(_tag, "requesting to unbind account...");
+-    onLog("Unbinding account...");
+-
+-    if (!http->Open("POST", get_unbind_user_account_info_url())) {
+-        mclog::tagError(_tag, "failed to open http request");
+-        onLog("Failed to connect to server");
+-        return false;
+-    }
+-
+-    int status_code = http->GetStatusCode();
+-    if (status_code != 200) {
+-        mclog::tagError(_tag, "http post failed, status code: {}", status_code);
+-        onLog("HTTP Request Failed");
+-        return false;
+-    }
+-
+-    std::string response = http->ReadAll();
+-    mclog::tagInfo(_tag, "response: {}", response);
+-
+-    cJSON *root = cJSON_Parse(response.c_str());
+-    if (!root) {
+-        mclog::tagError(_tag, "failed to parse json");
+-        onLog("Failed to parse response");
+-        return false;
+-    }
+-
+-    bool success = false;
+-    cJSON *code  = cJSON_GetObjectItem(root, "code");
+-
+-    if (code && cJSON_IsNumber(code) && code->valueint == 0) {
+-        Settings settings(_setting_ns.data(), true);
+-        settings.SetString(_setting_username_key.data(), "Account Info");
+-        settings.SetString(_setting_device_name_key.data(), "");
+-        mclog::tagInfo(_tag, "account unbound successfully");
+-        onLog("Account unbound successfully");
+-        success = true;
+-    } else {
+-        mclog::tagError(_tag, "invalid response format or error code");
+-        cJSON *msg = cJSON_GetObjectItem(root, "message");
+-        if (msg && cJSON_IsString(msg)) {
+-            onLog(std::string("Unbind failed: ") + msg->valuestring);
+-        } else {
+-            onLog("Invalid response from server");
+-        }
+-    }
+-
+-    cJSON_Delete(root);
+-
+-    if (success) {
+-        resetAppConfiged();
+-    }
+-
+-    return success;
++    onLog("No vendor account is required");
++    return false;
+ }
+diff --git a/firmware/main/hal/hal_network.cpp b/firmware/main/hal/hal_network.cpp
+index 1a96ada..2473b41 100644
+--- a/firmware/main/hal/hal_network.cpp
++++ b/firmware/main/hal/hal_network.cpp
+@@ -20,7 +20,7 @@
+ static std::string _tag           = "Network";
+ static bool _is_network_connected = false;
+ 
+-static void time_sync_notification_cb(struct timeval* tv)
++[[maybe_unused]] static void time_sync_notification_cb(struct timeval* tv)
+ {
+     mclog::tagInfo(_tag, "SNTP time synchronized");
+     GetHAL().syncSystemTimeToRtc();
+@@ -28,20 +28,8 @@ static void time_sync_notification_cb(struct timeval* tv)
+ 
+ void Hal::startSntp()
+ {
+-    mclog::tagInfo(_tag, "SNTP init");
+-
+-    if (esp_sntp_enabled()) {
+-    } else {
+-        esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+-
+-        esp_sntp_setservername(0, "pool.ntp.org");
+-        esp_sntp_setservername(1, "time.google.com");
+-        esp_sntp_setservername(2, "cn.pool.ntp.org");
+-
+-        sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+-
+-        esp_sntp_init();
+-    }
++    // Use the hardware RTC. No unsolicited public NTP connections.
++    return;
+ }
+ 
+ void Hal::startNetwork(std::function<void(std::string_view)> onLog)
+diff --git a/firmware/main/hal/hal_ota.cpp b/firmware/main/hal/hal_ota.cpp
+index 60300f4..4ce710e 100644
+--- a/firmware/main/hal/hal_ota.cpp
++++ b/firmware/main/hal/hal_ota.cpp
+@@ -13,64 +13,6 @@ static const std::string_view _tag = "HAL-OTA";
+ 
+ bool Hal::updateFirmware(std::function<void(std::string_view)> onLog)
+ {
+-    onLog("Checking firmware updates...");
+-
+-    Ota ota;
+-    esp_err_t err = ota.CheckVersion();
+-    if (err != ESP_OK) {
+-        mclog::tagError(_tag, "failed to check firmware version: {}", esp_err_to_name(err));
+-        onLog("Failed to check firmware updates");
+-        return false;
+-    }
+-
+-    if (!ota.HasNewVersion()) {
+-        ota.MarkCurrentVersionValid();
+-        mclog::tagInfo(_tag, "no new firmware version available");
+-        onLog("Already up to date");
+-        return true;
+-    }
+-
+-    const std::string &firmware_url     = ota.GetFirmwareUrl();
+-    const std::string &firmware_version = ota.GetFirmwareVersion();
+-    if (firmware_url.empty()) {
+-        mclog::tagError(_tag, "firmware update available but url is empty");
+-        onLog("Invalid firmware update info");
+-        return false;
+-    }
+-
+-    mclog::tagInfo(_tag, "new firmware available: version={}, url={}", firmware_version, firmware_url);
+-    if (!firmware_version.empty()) {
+-        onLog(std::string("New firmware found: ") + firmware_version);
+-    } else {
+-        onLog("New firmware found");
+-    }
+-
+-    onLog("Starting firmware upgrade...");
+-    int last_reported_progress = -1;
+-    bool upgrade_success       = Ota::Upgrade(firmware_url, [&](int progress, size_t speed) {
+-        if (progress == last_reported_progress) {
+-            return;
+-        }
+-
+-        last_reported_progress = progress;
+-
+-        char msg[48];
+-        std::snprintf(msg, sizeof(msg), "Upgrading firmware: %d%% at %uKB/s", progress,
+-                            static_cast<unsigned>(speed / 1024));
+-        onLog(msg);
+-          });
+-
+-    if (!upgrade_success) {
+-        mclog::tagError(_tag, "firmware upgrade failed: version={}, url={}", firmware_version, firmware_url);
+-        onLog("Firmware upgrade failed, rebooting...");
+-        vTaskDelay(pdMS_TO_TICKS(5000));
+-        reboot();
+-        return false;
+-    }
+-
+-    mclog::tagInfo(_tag, "firmware upgrade successful, rebooting");
+-    onLog("Upgrade successful, rebooting...");
+-    vTaskDelay(pdMS_TO_TICKS(1000));
+-    reboot();
+-    return true;
++    onLog("Stakia firmware updates use USB from your computer");
++    return false;
+ }
+diff --git a/firmware/main/hal/utils/secret_logic/secret_logic.cpp b/firmware/main/hal/utils/secret_logic/secret_logic.cpp
+index 7194b6f..b28f329 100644
+--- a/firmware/main/hal/utils/secret_logic/secret_logic.cpp
++++ b/firmware/main/hal/utils/secret_logic/secret_logic.cpp
+@@ -10,11 +10,8 @@ namespace secret_logic {
+ 
+ __attribute__((weak)) std::string get_server_url()
+ {
+-#ifdef CONFIG_STACKCHAN_SERVER_URL
+-    return CONFIG_STACKCHAN_SERVER_URL;
+-#else
+-    return "http://localhost:3000";
+-#endif
++    // Vendor service endpoints are unavailable in this build.
++    return {};
+ }
+ 
+ __attribute__((weak)) std::string generate_auth_token()
+diff --git a/firmware/main/main.cpp b/firmware/main/main.cpp
+index 3f11ed6..fc38e0e 100644
+--- a/firmware/main/main.cpp
++++ b/firmware/main/main.cpp
+@@ -33,10 +33,7 @@ extern "C" void app_main(void)
+         // Install apps
+         GetMooncake().installApp(std::make_unique<AppLauncher>());
+         GetMooncake().installApp(std::make_unique<AppAiAgent>());
+-        GetMooncake().installApp(std::make_unique<AppAvatar>());
+         GetMooncake().installApp(std::make_unique<AppEspnowControl>());
+-        GetMooncake().installApp(std::make_unique<AppAppCenter>());
+-        GetMooncake().installApp(std::make_unique<AppEzdata>());
+         GetMooncake().installApp(std::make_unique<AppDance>());
+         GetMooncake().installApp(std::make_unique<AppSetup>());
+ 
+diff --git a/firmware/main/idf_component.yml b/firmware/main/idf_component.yml
+index f124751..4c0f541 100644
+--- a/firmware/main/idf_component.yml
++++ b/firmware/main/idf_component.yml
+@@ -23,7 +23,7 @@ dependencies:
+   78/esp-wifi-connect: ~3.1.1
+   espressif/esp_audio_effects: ~1.2.1
+   espressif/esp_audio_codec: ~2.4.1
+-  78/esp-ml307: ~3.6.4
++  78/esp-ml307: ==3.6.4
+   78/uart-eth-modem:
+     version: ~0.3.3
+     rules:
