@@ -26,3 +26,6 @@ tzdata>=2024.1
 # python-dotenv — load .env.local at the top of bridge.py so secrets
 # (LLM_API_KEY, OPENROUTER_API_KEY) live outside the shell env and outside git.
 python-dotenv>=1.0,<2
+
+# Local certificate provisioning, no external certificate service.
+cryptography>=46,<47

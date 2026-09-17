@@ -26,6 +26,7 @@ _DBG = os.environ.get("ZEROCLAW_STREAM_DEBUG") == "1"
 from config.logger import setup_logging
 from core.providers.llm.base import LLMProviderBase
 from core.utils.textUtils import FALLBACK_EMOJI, _SENTENCE_BOUNDARY
+from core.utils.dialogue import bounded_dialogue
 
 TAG = __name__
 logger = setup_logging()
@@ -178,6 +179,7 @@ class LLMProvider(LLMProviderBase):
         content = self._compose(dialogue)
         return {
             "content": content,
+            "messages": bounded_dialogue(dialogue),
             "channel": self.channel,
             "session_id": session_id or self.session_id,
             "metadata": metadata,

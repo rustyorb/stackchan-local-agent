@@ -1,0 +1,3 @@
+{{ base_prompt }}
+
+Reply in English. Keep responses concise and suitable for speech.

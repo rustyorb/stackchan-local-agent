@@ -45,12 +45,22 @@ class ASRProvider(ASRProviderBase):
         self.initial_prompt = config.get("initial_prompt", None)
         self.delete_audio_file = delete_audio_file
 
+        if not self.model_dir or not os.path.isdir(self.model_dir):
+            raise ValueError(
+                f"whisper_local: model_dir missing or not found: {self.model_dir!r}; "
+                "automatic model downloads are disabled"
+            )
+        for filename in ("model.bin", "config.json", "tokenizer.json"):
+            if not os.path.isfile(os.path.join(self.model_dir, filename)):
+                raise ValueError(
+                    f"whisper_local: required local asset missing: "
+                    f"{os.path.join(self.model_dir, filename)}"
+                )
+
         if self.output_dir:
             os.makedirs(self.output_dir, exist_ok=True)
 
-        # Prefer an on-disk CTranslate2 model directory if provided; otherwise
-        # fall back to the named model_size (faster-whisper auto-fetches).
-        model_id = self.model_dir if self.model_dir else self.model_size
+        model_id = self.model_dir
 
         logger.bind(tag=TAG).info(
             f"Loading faster-whisper model: id={model_id} device={self.device} "
@@ -63,6 +73,7 @@ class ASRProvider(ASRProviderBase):
             device=self.device,
             compute_type=self.compute_type,
             cpu_threads=self.cpu_threads,
+            local_files_only=True,
         )
 
         # Warm-up: transcribe 1 s of silence so the lazy model load + first
