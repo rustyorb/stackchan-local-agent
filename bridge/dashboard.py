@@ -354,7 +354,7 @@ async def host_settings_view(request: Request) -> Any:
 async def host_settings_save(
     request: Request,
     profile: str = Form(...),
-    pause_seconds: str = Form(...),
+    pause_seconds: str = Form(""),
     idle_mode: str = Form(...),
     idle_minutes: str | None = Form(None),
     idle_farewell: str | None = Form(None),

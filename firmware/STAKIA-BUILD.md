@@ -13,7 +13,7 @@ idf.py --version
 Get-CimInstance Win32_SerialPort | Select-Object DeviceID, Name
 ```
 
-The pinned factory source requires ESP-IDF **5.5.4**. Mars’s screenshot shows **6.1** installed; install 5.5.4 alongside it and open the 5.5.4 terminal for this build. Confirm the USB port; The screenshot lists **COM15 as USB Serial Device**. Confirm this is Stakia by unplugging/reconnecting her and checking which port disappears/returns. If no serial port appears, inspect Device Manager and check the USB data cable.
+The pinned factory source requires ESP-IDF **5.5.4**. Mars’s latest screenshot confirms the 5.5.4 terminal is active. Use that terminal for this build. The screenshot lists **COM15 as USB Serial Device**. Confirm this is Stakia by unplugging/reconnecting her and checking which port disappears/returns. If no serial port appears, inspect Device Manager and check the USB data cable.
 
 From the root of this project:
 
